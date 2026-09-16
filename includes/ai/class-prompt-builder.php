@@ -99,7 +99,7 @@ final class Prompt_Builder {
 		$parts[] = $this->business_identity_block();
 		$parts[] = $this->scope_rules_block();
 		$parts[] = (string) $this->settings->get( 'global_prompt', '' );
-		$parts[] = 'Write a polite email auto-reply to a contact form enquiry for THIS business only. Address the sender by name if available. Acknowledge their message. Answer only using the business profile, FAQ, and site content. Do not invent prices, guarantees, licences, or availability. If the enquiry is off-topic or outside services/area, politely say you cannot help with that and invite them to rephrase or leave details for the team. Sign off as this business. Output plain text email body only (no subject line, no markdown fences).';
+		$parts[] = $this->cf7_reply_instructions_block();
 
 		$faq_bits = array();
 		foreach ( $this->faq->all() as $item ) {
@@ -123,6 +123,43 @@ final class Prompt_Builder {
 		}
 
 		return implode( "\n\n", array_filter( array_map( 'trim', $parts ) ) );
+	}
+
+	/**
+	 * Core CF7 auto-reply instructions, including optional detail/photo follow-up.
+	 */
+	private function cf7_reply_instructions_block(): string {
+		$lines   = array();
+		$lines[] = 'Write a polite email auto-reply to a contact form enquiry for THIS business only.';
+		$lines[] = 'Address the sender by name if available. Acknowledge their message.';
+		$lines[] = 'Answer only using the business profile, FAQ, and site content.';
+		$lines[] = 'Do not invent prices, guarantees, licences, or availability.';
+		$lines[] = 'If the enquiry is off-topic or outside services/area, politely say you cannot help with that and invite them to leave details for the team. Do not ask for job photos in that case.';
+		$lines[] = 'Sign off as this business. Output plain text email body only (no subject line, no markdown fences).';
+
+		$ask_follow_up = (bool) $this->settings->get( 'cf7_ask_follow_up', true );
+		$ask_photos    = (bool) $this->settings->get( 'cf7_ask_photos', true );
+
+		if ( $ask_follow_up || $ask_photos ) {
+			$lines[] = 'FOLLOW-UP REQUESTS (only when the enquiry clearly matches a service this business offers and is in scope):';
+			$lines[] = '- Invite them to reply to this email with any extra relevant details still needed to help the team assess, quote, or book the job.';
+			$lines[] = '- Ask only for details that are missing or unclear from their message; do not repeat facts they already provided.';
+			$lines[] = '- Keep the ask short (a few bullet points or one short paragraph).';
+
+			if ( $ask_photos ) {
+				$lines[] = '- If photos would realistically help for this kind of job, also ask them to reply with clear photos/images attached.';
+				$lines[] = '- Only request photos when visual evidence is useful (e.g. damage, leaks, installations, faults, site conditions). Skip photos for admin, hours, coverage-area, or purely informational questions.';
+			} else {
+				$lines[] = '- Do not ask for photos or images.';
+			}
+
+			$guidance = trim( (string) $this->settings->get( 'cf7_follow_up_guidance', '' ) );
+			if ( '' !== $guidance ) {
+				$lines[] = 'Additional follow-up guidance from the business: ' . $guidance;
+			}
+		}
+
+		return implode( "\n", $lines );
 	}
 
 	/**

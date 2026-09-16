@@ -509,6 +509,27 @@ if ( ! isset( $tabs[ $tab ] ) ) {
 							<th scope="row"><?php echo esc_html__( 'On spam / rate limit', 'qbmbot' ); ?></th>
 							<td><label><input type="checkbox" name="cf7_send_fallback_on_block" value="1" <?php checked( ! empty( $settings['cf7_send_fallback_on_block'] ) ); ?> /> <?php echo esc_html__( 'Send fallback email (no AI) when blocked', 'qbmbot' ); ?></label></td>
 						</tr>
+						<tr>
+							<th scope="row"><?php echo esc_html__( 'Ask for more details', 'qbmbot' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="cf7_ask_follow_up" value="1" <?php checked( ! empty( $settings['cf7_ask_follow_up'] ) ); ?> /> <?php echo esc_html__( 'For covered services, ask them to reply with any missing relevant details', 'qbmbot' ); ?></label>
+								<p class="description"><?php echo esc_html__( 'Only when the enquiry matches a service you offer. Skipped for off-topic or out-of-area messages.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php echo esc_html__( 'Ask for photos', 'qbmbot' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="cf7_ask_photos" value="1" <?php checked( ! empty( $settings['cf7_ask_photos'] ) ); ?> /> <?php echo esc_html__( 'When it makes sense for the job, ask them to reply with photos/images', 'qbmbot' ); ?></label>
+								<p class="description"><?php echo esc_html__( 'Useful for leaks, damage, installations, site conditions, etc. Not used for simple admin or coverage questions.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="cf7_follow_up_guidance"><?php echo esc_html__( 'Follow-up guidance', 'qbmbot' ); ?></label></th>
+							<td>
+								<textarea class="large-text" rows="5" name="cf7_follow_up_guidance" id="cf7_follow_up_guidance"><?php echo esc_textarea( (string) $settings['cf7_follow_up_guidance'] ); ?></textarea>
+								<p class="description"><?php echo esc_html__( 'Optional: steer which details or photo types to request for your trade.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
 					</table>
 				<?php endif; ?>
 

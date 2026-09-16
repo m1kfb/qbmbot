@@ -36,16 +36,25 @@ final class Lead_Capture {
 	private Logger $logger;
 
 	/**
+	 * Job intake helper.
+	 *
+	 * @var Job_Intake
+	 */
+	private Job_Intake $intake;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings Settings.
-	 * @param Mailer   $mailer   Mailer.
-	 * @param Logger   $logger   Logger.
+	 * @param Settings   $settings Settings.
+	 * @param Mailer     $mailer   Mailer.
+	 * @param Logger     $logger   Logger.
+	 * @param Job_Intake $intake   Job intake.
 	 */
-	public function __construct( Settings $settings, Mailer $mailer, Logger $logger ) {
+	public function __construct( Settings $settings, Mailer $mailer, Logger $logger, ?Job_Intake $intake = null ) {
 		$this->settings = $settings;
 		$this->mailer   = $mailer;
 		$this->logger   = $logger;
+		$this->intake   = $intake ?? new Job_Intake();
 	}
 
 	/**
@@ -131,10 +140,17 @@ final class Lead_Capture {
 	 */
 	public function enquiry_ready( array $lead ): bool {
 		$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
-		if ( '' === $enquiry ) {
+		if ( '' === $enquiry || $this->is_thin_enquiry( $enquiry ) ) {
 			return false;
 		}
-		return ! $this->is_thin_enquiry( $enquiry );
+		return $this->intake->details_complete( $lead );
+	}
+
+	/**
+	 * Job intake helper (shared with offline replies / prompts).
+	 */
+	public function intake(): Job_Intake {
+		return $this->intake;
 	}
 
 	/**
@@ -147,21 +163,29 @@ final class Lead_Capture {
 		$raw = get_transient( $this->key( $session_id ) );
 		if ( ! is_array( $raw ) ) {
 			return array(
-				'name'    => '',
-				'email'   => '',
-				'phone'   => '',
-				'enquiry' => '',
-				'sent'    => false,
+				'name'              => '',
+				'email'             => '',
+				'phone'             => '',
+				'enquiry'           => '',
+				'job_type'          => '',
+				'job_label'         => '',
+				'detail_pending'    => null,
+				'details_complete'  => false,
+				'sent'              => false,
 			);
 		}
 		return wp_parse_args(
 			$raw,
 			array(
-				'name'    => '',
-				'email'   => '',
-				'phone'   => '',
-				'enquiry' => '',
-				'sent'    => false,
+				'name'             => '',
+				'email'            => '',
+				'phone'            => '',
+				'enquiry'          => '',
+				'job_type'         => '',
+				'job_label'        => '',
+				'detail_pending'   => null,
+				'details_complete' => false,
+				'sent'             => false,
 			)
 		);
 	}
@@ -217,6 +241,11 @@ final class Lead_Capture {
 			$enquiry_bits[] = $clean;
 		}
 		$lead['enquiry'] = $this->truncate( implode( "\n", array_unique( $enquiry_bits ) ), 2000 );
+
+		if ( ! $this->is_thin_enquiry( (string) $lead['enquiry'] ) ) {
+			$prev = $this->previous_assistant_message( $history );
+			$lead = $this->intake->advance( $lead, $message, $prev );
+		}
 
 		return $lead;
 	}
@@ -455,6 +484,11 @@ final class Lead_Capture {
 		$lines[] = '';
 		$lines[] = 'Enquiry:';
 		$lines[] = (string) ( $lead['enquiry'] ?? '' );
+		$job     = trim( (string) ( $lead['job_label'] ?? '' ) );
+		if ( '' !== $job ) {
+			$lines[] = '';
+			$lines[] = 'Job type: ' . $job;
+		}
 		$lines[] = '';
 		$lines[] = 'Site: ' . home_url( '/' );
 		$lines[] = 'Received: ' . current_time( 'mysql' );

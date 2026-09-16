@@ -22,12 +22,21 @@ final class Chat_Fallback {
 	private Settings $settings;
 
 	/**
+	 * Job intake.
+	 *
+	 * @var Job_Intake
+	 */
+	private Job_Intake $intake;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings Settings.
+	 * @param Settings        $settings Settings.
+	 * @param Job_Intake|null $intake   Job intake.
 	 */
-	public function __construct( Settings $settings ) {
+	public function __construct( Settings $settings, ?Job_Intake $intake = null ) {
 		$this->settings = $settings;
+		$this->intake   = $intake ?? new Job_Intake();
 	}
 
 	/**
@@ -53,21 +62,16 @@ final class Chat_Fallback {
 	 * @param array<string, mixed> $lead_before Lead before turn.
 	 */
 	private function lead_reply( string $message, array $lead, array $lead_before ): string {
-		if ( ! empty( $lead['sent'] ) ) {
-			$name = trim( (string) ( $lead['name'] ?? '' ) );
-			if ( '' !== $name ) {
-				return sprintf(
-					/* translators: %s: visitor first name */
-					__( 'Thanks %s — we have your details and the team will be in touch soon.', 'qbmbot' ),
-					$this->first_name( $name )
-				);
-			}
-			return __( 'Thanks — we have your details and the team will be in touch soon.', 'qbmbot' );
+		$was_sent = ! empty( $lead_before['sent'] );
+		$now_sent = ! empty( $lead['sent'] );
+
+		if ( $now_sent ) {
+			return $this->post_capture_reply( $message, $lead, $was_sent );
 		}
 
 		$filled = $this->fields_just_filled( $lead_before, $lead );
 		$ask    = $this->next_lead_question( $lead );
-		$ack    = $this->acknowledgment( $message, $lead, $filled );
+		$ack    = $this->acknowledgment( $message, $lead, $lead_before, $filled );
 
 		if ( '' === $ask ) {
 			return $ack !== '' ? $ack : $this->intro_or_generic( $message );
@@ -81,13 +85,51 @@ final class Chat_Fallback {
 	}
 
 	/**
+	 * Replies after the lead email has already been sent.
+	 *
+	 * @param string               $message  Message.
+	 * @param array<string, mixed> $lead     Lead.
+	 * @param bool                 $was_sent Already sent before this turn.
+	 */
+	private function post_capture_reply( string $message, array $lead, bool $was_sent ): string {
+		$name = $this->first_name( trim( (string) ( $lead['name'] ?? '' ) ) );
+
+		if ( $this->intake->is_pricing_question( $message ) ) {
+			$base = __( "We can't give a firm price here as it depends on the job, but a member of the team will be in touch shortly with more information.", 'qbmbot' );
+			if ( '' !== $name && ! $was_sent ) {
+				return sprintf(
+					/* translators: 1: first name, 2: pricing reply */
+					__( 'Thanks %1$s — %2$s', 'qbmbot' ),
+					$name,
+					lcfirst( $base )
+				);
+			}
+			return $base;
+		}
+
+		if ( ! $was_sent ) {
+			if ( '' !== $name ) {
+				return sprintf(
+					/* translators: %s: visitor first name */
+					__( 'Thanks %s — we have your details and the team will be in touch soon.', 'qbmbot' ),
+					$name
+				);
+			}
+			return __( 'Thanks — we have your details and the team will be in touch soon.', 'qbmbot' );
+		}
+
+		return __( 'A member of the team already has your details and will cover that when they get in touch. Is there anything else we should note for them?', 'qbmbot' );
+	}
+
+	/**
 	 * Short acknowledgment for what the visitor just shared.
 	 *
-	 * @param string               $message Message.
-	 * @param array<string, mixed> $lead    Lead after.
-	 * @param array<int, string>   $filled  Fields filled this turn.
+	 * @param string               $message     Message.
+	 * @param array<string, mixed> $lead        Lead after.
+	 * @param array<string, mixed> $lead_before Lead before.
+	 * @param array<int, string>   $filled      Fields filled this turn.
 	 */
-	private function acknowledgment( string $message, array $lead, array $filled ): string {
+	private function acknowledgment( string $message, array $lead, array $lead_before, array $filled ): string {
 		$name = trim( (string) ( $lead['name'] ?? '' ) );
 
 		if ( in_array( 'name', $filled, true ) && '' !== $name ) {
@@ -106,20 +148,30 @@ final class Chat_Fallback {
 			return __( 'Perfect, thanks.', 'qbmbot' );
 		}
 
-		if ( in_array( 'enquiry', $filled, true ) ) {
-			$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
-			$snippet = $this->short_job_label( $enquiry !== '' ? $enquiry : $message );
-			if ( '' !== $snippet ) {
-				return sprintf(
-					/* translators: %s: short job summary */
-					__( 'Thanks — %s is something we can help with.', 'qbmbot' ),
-					$snippet
-				);
-			}
+		$pending_before = $this->intake->pending_keys( $lead_before );
+		$pending_after  = $this->intake->pending_keys( $lead );
+		$answered_detail = ! empty( $pending_before ) && count( $pending_after ) < count( $pending_before );
+
+		if ( $answered_detail ) {
 			return __( 'Thanks, that helps.', 'qbmbot' );
 		}
 
-		// First useful turn: introduce the business briefly when they mention the trade/area.
+		$job_just_set = '' === trim( (string) ( $lead_before['job_type'] ?? '' ) )
+			&& '' !== trim( (string) ( $lead['job_type'] ?? '' ) );
+
+		if ( $job_just_set || ( in_array( 'enquiry', $filled, true ) && '' !== trim( (string) ( $lead['job_type'] ?? '' ) ) ) ) {
+			$label = $this->intake->short_label( $lead, $message );
+			return sprintf(
+				/* translators: %s: short job summary */
+				__( 'Thanks — %s is something we can help with.', 'qbmbot' ),
+				$label
+			);
+		}
+
+		if ( in_array( 'enquiry', $filled, true ) ) {
+			return __( 'Thanks, that helps.', 'qbmbot' );
+		}
+
 		$trade    = trim( (string) $this->settings->get( 'business_trade', '' ) );
 		$services = trim( (string) $this->settings->get( 'business_services', '' ) );
 		$area     = trim( (string) $this->settings->get( 'business_service_area', '' ) );
@@ -156,7 +208,7 @@ final class Chat_Fallback {
 	}
 
 	/**
-	 * Ask for the next missing lead field only.
+	 * Ask for the next missing lead field / job detail only.
 	 *
 	 * @param array<string, mixed> $lead Lead.
 	 */
@@ -165,6 +217,12 @@ final class Chat_Fallback {
 		if ( '' === $enquiry || $this->is_thin_enquiry( $enquiry ) ) {
 			return __( 'Could you tell us a little more about what you need help with?', 'qbmbot' );
 		}
+
+		$detail = $this->intake->next_question( $lead );
+		if ( '' !== $detail ) {
+			return $detail;
+		}
+
 		if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
 			return __( 'What name should we use for this enquiry?', 'qbmbot' );
 		}
@@ -178,7 +236,7 @@ final class Chat_Fallback {
 	}
 
 	/**
-	 * Mirror Lead_Capture thin-enquiry check for offline flow.
+	 * Vague “I need an electrician” style lines need a follow-up before contact details.
 	 *
 	 * @param string $enquiry Enquiry.
 	 */
@@ -264,7 +322,6 @@ final class Chat_Fallback {
 			if ( '' === $was && '' !== $now ) {
 				$filled[] = $field;
 			} elseif ( 'enquiry' === $field && '' !== $now && $now !== $was && strlen( $now ) > strlen( $was ) + 8 ) {
-				// Enquiry grew meaningfully (new detail).
 				$filled[] = 'enquiry';
 			}
 		}
@@ -325,24 +382,6 @@ final class Chat_Fallback {
 		$parts = preg_split( '/\s+/', trim( $name ) ) ?: array();
 		$first = (string) ( $parts[0] ?? $name );
 		return $first !== '' ? $first : $name;
-	}
-
-	/**
-	 * Compact job label for acknowledgments.
-	 *
-	 * @param string $text Enquiry text.
-	 */
-	private function short_job_label( string $text ): string {
-		$text = trim( preg_replace( '/\s+/', ' ', $text ) ?? $text );
-		$text = preg_replace( '/^(?:i need|i\'m looking for|looking for|need|want|can you|could you)\s+/i', '', $text ) ?? $text;
-		$text = trim( $text, " \t\n\r\0\x0B.," );
-		if ( '' === $text ) {
-			return '';
-		}
-		if ( strlen( $text ) > 60 ) {
-			$text = rtrim( substr( $text, 0, 57 ) ) . '…';
-		}
-		return lcfirst( $text );
 	}
 
 	/**

@@ -107,7 +107,7 @@ final class Settings {
 			'lead_require_phone'        => true,
 			'lead_notify_email'         => '',
 			'lead_email_subject'        => 'New chat enquiry',
-			'lead_capture_guidance'     => 'When the visitor has a genuine job enquiry, gather their name, email, and phone naturally so the team can call them back. Prefer one question at a time.',
+			'lead_capture_guidance'     => 'After you know the job type, ask practical follow-ups before contact details (e.g. rewire: room use, sockets/lights, house or flat). Never invent prices — say a team member will follow up.',
 			'blocked_message'           => 'Sorry, chat is temporarily unavailable. Please try again later or use the contact form.',
 			'delete_data_on_uninstall'  => false,
 		);

@@ -109,11 +109,15 @@ final class Prompt_Builder {
 		$lines[] = 'Ask for at most one missing detail at a time, woven into a helpful reply.';
 		$lines[] = 'If they already gave a detail, do not ask for it again.';
 		$lines[] = 'If they only said they need an electrician/plumber/etc without the actual job (e.g. rewiring, sockets), ask what they need help with before asking for name or contact details.';
+		$lines[] = 'Once you know the job type, ask 1–3 practical follow-ups before contact details. Examples: room rewire → what the room is used for, how many sockets/lights, house or flat; leak → where and urgency; boiler → repair vs replace.';
 		$lines[] = 'Keep replies short: one brief acknowledgment + one question. Do not mention the contact form unless they ask how else to get in touch.';
+		$lines[] = 'Never invent prices. If they ask how much it costs, say you cannot give a firm price in chat because it depends on the job, and that a team member will follow up.';
 		$lines[] = 'When you have enough to help them book/quote, confirm you will pass their details to the team.';
 
 		if ( ! empty( $lead['sent'] ) ) {
-			$lines[] = 'Their enquiry has already been passed to the team. Thank them and answer remaining questions; do not re-ask for contact details.';
+			$lines[] = 'Their enquiry has already been passed to the team. Do not re-ask for contact details.';
+			$lines[] = 'If they ask about price/cost/quote, say you cannot give a firm price here and that a team member will be in touch shortly.';
+			$lines[] = 'For other follow-ups, say the team has their details and will cover it when they call/email; offer to note anything else useful.';
 			return implode( "\n", $lines );
 		}
 
@@ -130,18 +134,30 @@ final class Prompt_Builder {
 		if ( '' !== trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
 			$have[] = 'enquiry=(captured)';
 		}
+		if ( '' !== trim( (string) ( $lead['job_type'] ?? '' ) ) ) {
+			$have[] = 'job_type=' . (string) $lead['job_type'];
+		}
 
-		// Prefer name/email/phone only after there is a concrete job description.
 		$enquiry_text = trim( (string) ( $lead['enquiry'] ?? '' ) );
 		$missing      = array();
+		$details_done = ! empty( $lead['details_complete'] )
+			|| ( isset( $lead['detail_pending'] ) && is_array( $lead['detail_pending'] ) && empty( $lead['detail_pending'] ) );
 		$thin         = ( '' === $enquiry_text ) || str_word_count( strtolower( $enquiry_text ) ) < 4;
 		$trade_only   = (bool) preg_match( '/\b(electrician|plumber|builder|heating engineer)s?\b/i', $enquiry_text )
 			&& ! (bool) preg_match( '/\b(rewir|wiring|install|repair|socket|fuse|room|kitchen|bathroom|quote|fault|leak|boiler)\w*\b/i', $enquiry_text );
 
 		if ( '' === $enquiry_text || $thin || $trade_only ) {
-			$missing[] = 'what they need help with (specific job details)';
+			$missing[] = 'what they need help with (specific job)';
+		} elseif ( ! $details_done ) {
+			$pending = is_array( $lead['detail_pending'] ?? null ) ? $lead['detail_pending'] : array();
+			if ( ! empty( $pending ) ) {
+				$missing[] = 'practical job details still needed (' . implode( ', ', array_map( 'strval', $pending ) ) . ')';
+			} else {
+				$missing[] = 'practical job details (room use, sockets/points, property type, urgency — whichever fits)';
+			}
 		}
-		if ( ! in_array( 'what they need help with (specific job details)', $missing, true ) ) {
+
+		if ( empty( $missing ) ) {
 			if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
 				$missing[] = 'name';
 			}

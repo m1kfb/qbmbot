@@ -247,6 +247,12 @@ final class Admin {
 	 * Save general tab.
 	 */
 	private function save_general(): void {
+		$github_token = (string) $this->settings->get( 'github_token', '' );
+		$github_in    = trim( (string) wp_unslash( (string) ( $_POST['github_token'] ?? '' ) ) );
+		if ( '' !== $github_in && ! $this->is_masked_secret( $github_in ) ) {
+			$github_token = sanitize_text_field( $github_in );
+		}
+
 		$this->settings->update(
 			array(
 				'widget_enabled'           => ! empty( $_POST['widget_enabled'] ),
@@ -259,10 +265,14 @@ final class Admin {
 				'lead_notify_email'        => sanitize_email( wp_unslash( (string) ( $_POST['lead_notify_email'] ?? '' ) ) ),
 				'lead_email_subject'       => sanitize_text_field( wp_unslash( (string) ( $_POST['lead_email_subject'] ?? '' ) ) ),
 				'lead_capture_guidance'    => sanitize_textarea_field( wp_unslash( (string) ( $_POST['lead_capture_guidance'] ?? '' ) ) ),
+				'github_token'             => $github_token,
 				'blocked_message'          => sanitize_text_field( wp_unslash( (string) ( $_POST['blocked_message'] ?? '' ) ) ),
 				'delete_data_on_uninstall' => ! empty( $_POST['delete_data_on_uninstall'] ),
 			)
 		);
+
+		// New token should force a fresh release lookup.
+		delete_transient( Updater::CACHE_KEY );
 	}
 
 	/**

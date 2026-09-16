@@ -157,6 +157,25 @@ if ( ! isset( $tabs[ $tab ] ) ) {
 							<td><input class="large-text" type="text" name="blocked_message" id="blocked_message" value="<?php echo esc_attr( (string) $settings['blocked_message'] ); ?>" /></td>
 						</tr>
 						<tr>
+							<th scope="row"><label for="github_token"><?php echo esc_html__( 'GitHub update token', 'qbmbot' ); ?></label></th>
+							<td>
+								<?php if ( defined( 'QBMBot_GITHUB_TOKEN' ) && '' !== trim( (string) constant( 'QBMBot_GITHUB_TOKEN' ) ) ) : ?>
+									<p class="description">
+										<?php echo esc_html__( 'Using token from wp-config.php (QBMBot_GITHUB_TOKEN). The field below is ignored while that constant is set.', 'qbmbot' ); ?>
+									</p>
+								<?php endif; ?>
+								<input class="regular-text" type="password" autocomplete="off" name="github_token" id="github_token" value="<?php echo esc_attr( \QBMBot\Admin::mask_key( (string) $settings['github_token'] ) ); ?>" placeholder="<?php echo esc_attr__( 'Leave blank to keep existing', 'qbmbot' ); ?>" <?php disabled( defined( 'QBMBot_GITHUB_TOKEN' ) && '' !== trim( (string) constant( 'QBMBot_GITHUB_TOKEN' ) ) ); ?> />
+								<p class="description">
+									<?php
+									echo esc_html__(
+										'Optional. Required only if the GitHub repo is private. Create a fine-grained PAT with Contents: Read on m1kfb/qbmbot. Prefer define( \'QBMBot_GITHUB_TOKEN\', \'…\' ); in wp-config.php on client sites.',
+										'qbmbot'
+									);
+									?>
+								</p>
+							</td>
+						</tr>
+						<tr>
 							<th scope="row"><?php echo esc_html__( 'Uninstall', 'qbmbot' ); ?></th>
 							<td><label><input type="checkbox" name="delete_data_on_uninstall" value="1" <?php checked( ! empty( $settings['delete_data_on_uninstall'] ) ); ?> /> <?php echo esc_html__( 'Delete settings, FAQ, and logs when uninstalling', 'qbmbot' ); ?></label></td>
 						</tr>

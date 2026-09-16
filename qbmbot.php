@@ -3,7 +3,7 @@
  * Plugin Name:       QBMBOT
  * Plugin URI:        https://github.com/m1kfb/qbmbot
  * Description:       AI chat widget and Contact Form 7 email auto-responder with spam protection and multi-provider AI.
- * Version:           1.1.3
+ * Version:           1.1.4
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            Queen B Marketing
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'QBMBot_VERSION', '1.1.3' );
+define( 'QBMBot_VERSION', '1.1.4' );
 define( 'QBMBot_FILE', __FILE__ );
 define( 'QBMBot_PATH', plugin_dir_path( __FILE__ ) );
 define( 'QBMBot_URL', plugin_dir_url( __FILE__ ) );

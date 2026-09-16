@@ -284,12 +284,16 @@ final class REST {
 
 		$this->limiter->hit( $ip, $session_id );
 
-		$history_for_lead = $this->get_history( $session_id );
-		$history_for_lead[] = array(
+		$lead_before = $this->leads->enabled() ? $this->leads->get_lead( $session_id ) : null;
+		$history     = $this->get_history( $session_id );
+		$history[]   = array(
 			'role'    => 'user',
 			'content' => $message,
 		);
-		$lead_before = $this->leads->enabled() ? $this->leads->get_lead( $session_id ) : null;
+
+		// Capture lead fields before composing a reply so we never re-ask for details already given.
+		$lead_processed = $this->process_lead_turn( $session_id, $message, $history, $ip );
+		$lead_after     = is_array( $lead_processed ) ? $lead_processed['lead'] : $lead_before;
 
 		if ( ! $this->router->is_active_configured() ) {
 			return $this->respond_with_fallback(
@@ -299,13 +303,13 @@ final class REST {
 				$spam['score'],
 				'missing_api_key',
 				'',
-				$lead_before
+				$lead_after,
+				$lead_before,
+				$lead_processed
 			);
 		}
 
-		$history = $history_for_lead;
-
-		$system = $this->prompts->chat_system( $faq_id ?: null, $message, $lead_before );
+		$system = $this->prompts->chat_system( $faq_id ?: null, $message, $lead_after );
 		$result = $this->router->complete( $system, $history );
 
 		if ( empty( $result['ok'] ) ) {
@@ -316,14 +320,15 @@ final class REST {
 				$spam['score'],
 				(string) ( $result['error'] ?? 'ai_failed' ),
 				(string) ( $result['provider'] ?? '' ),
-				$lead_before
+				$lead_after,
+				$lead_before,
+				$lead_processed
 			);
 		}
 
 		$reply = (string) $result['content'];
 		$this->append_history( $session_id, 'user', $message );
 		$this->append_history( $session_id, 'assistant', $reply );
-		$lead_result = $this->maybe_process_lead( $session_id, $message, $ip );
 
 		$this->logger->log(
 			array(
@@ -336,19 +341,21 @@ final class REST {
 			)
 		);
 
-		return $this->chat_response( $reply, $lead_result );
+		return $this->chat_response( $reply, $this->lead_status( $lead_processed ) );
 	}
 
 	/**
 	 * Return a helpful offline reply when AI is unavailable.
 	 *
-	 * @param string                    $message    User message.
-	 * @param string                    $session_id Session id.
-	 * @param string                    $ip         Client IP.
-	 * @param int                       $spam_score Spam score.
-	 * @param string                    $reason     Failure reason.
-	 * @param string                    $provider   Provider slug.
-	 * @param array<string, mixed>|null $lead       Lead state before this turn.
+	 * @param string                                                         $message        User message.
+	 * @param string                                                         $session_id     Session id.
+	 * @param string                                                         $ip             Client IP.
+	 * @param int                                                            $spam_score     Spam score.
+	 * @param string                                                         $reason         Failure reason.
+	 * @param string                                                         $provider       Provider slug.
+	 * @param array<string, mixed>|null                                      $lead_after     Lead after this turn.
+	 * @param array<string, mixed>|null                                      $lead_before    Lead before this turn.
+	 * @param array{sent:bool,lead:array<string,mixed>,missing:array<int,string>}|null $lead_processed Processed lead payload.
 	 */
 	private function respond_with_fallback(
 		string $message,
@@ -357,13 +364,14 @@ final class REST {
 		int $spam_score,
 		string $reason,
 		string $provider,
-		?array $lead = null
+		?array $lead_after = null,
+		?array $lead_before = null,
+		?array $lead_processed = null
 	): WP_REST_Response {
-		$reply = $this->fallback->reply( $message, $lead );
+		$reply = $this->fallback->reply( $message, $lead_after, $lead_before );
 
 		$this->append_history( $session_id, 'user', $message );
 		$this->append_history( $session_id, 'assistant', $reply );
-		$lead_result = $this->maybe_process_lead( $session_id, $message, $ip );
 
 		$this->logger->log(
 			array(
@@ -376,11 +384,43 @@ final class REST {
 			)
 		);
 
-		return $this->chat_response( $reply, $lead_result );
+		return $this->chat_response( $reply, $this->lead_status( $lead_processed ) );
 	}
 
 	/**
 	 * Process lead capture for this turn when enabled.
+	 *
+	 * @param string                                    $session_id Session.
+	 * @param string                                    $message    User message.
+	 * @param array<int, array{role:string,content:string}> $history History including this user message.
+	 * @param string                                    $ip         IP.
+	 * @return array{sent:bool,lead:array<string,mixed>,missing:array<int,string>}|null
+	 */
+	private function process_lead_turn( string $session_id, string $message, array $history, string $ip ): ?array {
+		if ( ! $this->leads->enabled() ) {
+			return null;
+		}
+		return $this->leads->process_turn( $session_id, $message, $history, $ip );
+	}
+
+	/**
+	 * Slim lead status for the REST payload.
+	 *
+	 * @param array{sent:bool,lead:array<string,mixed>,missing:array<int,string>}|null $processed Processed lead.
+	 * @return array{sent:bool,missing:array<int,string>}|null
+	 */
+	private function lead_status( ?array $processed ): ?array {
+		if ( null === $processed ) {
+			return null;
+		}
+		return array(
+			'sent'    => ! empty( $processed['sent'] ),
+			'missing' => $processed['missing'],
+		);
+	}
+
+	/**
+	 * Process lead capture for FAQ static answers.
 	 *
 	 * @param string $session_id Session.
 	 * @param string $message    User message.
@@ -388,14 +428,9 @@ final class REST {
 	 * @return array{sent:bool,missing:array<int,string>}|null
 	 */
 	private function maybe_process_lead( string $session_id, string $message, string $ip ): ?array {
-		if ( ! $this->leads->enabled() ) {
-			return null;
-		}
-		$result = $this->leads->process_turn( $session_id, $message, $this->get_history( $session_id ), $ip );
-		return array(
-			'sent'    => ! empty( $result['sent'] ),
-			'missing' => $result['missing'],
-		);
+		$history   = $this->get_history( $session_id );
+		$processed = $this->process_lead_turn( $session_id, $message, $history, $ip );
+		return $this->lead_status( $processed );
 	}
 
 	/**

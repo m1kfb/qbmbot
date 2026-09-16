@@ -102,7 +102,7 @@ final class Settings {
 			'appearance_offset_y'       => 20,
 			'appearance_custom_css'     => '',
 			'welcome_message'           => 'Hi! How can we help today?',
-			'chat_fallback_message'     => 'Thanks for your message. Please share a few more details or use the contact form on our website and the team will get back to you soon.',
+			'chat_fallback_message'     => 'Thanks for your message. How can we help today?',
 			'lead_capture_enabled'      => true,
 			'lead_require_phone'        => true,
 			'lead_notify_email'         => '',

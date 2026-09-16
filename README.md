@@ -19,6 +19,8 @@ AI chat widget and Contact Form 7 email auto-responder for WordPress. Built to w
 
 QBMBOT checks [GitHub Releases](https://github.com/m1kfb/qbmbot/releases) for a newer version (cached ~12 hours). When one exists, WordPress shows the normal **Plugins → update available** notice and one-click upgrade from the release zip.
 
+The GitHub repository must be **public** so WordPress can read the Releases API without a token. Click **Check again** on **Dashboard → Updates** to refresh immediately after a new release.
+
 **Release checklist (maintainers):**
 
 1. Bump `Version:` and `QBMBot_VERSION` in `qbmbot.php`

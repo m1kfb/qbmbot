@@ -101,19 +101,6 @@ final class Prompt_Builder {
 	 */
 	private function lead_capture_block( array $lead ): string {
 		$require_phone = (bool) $this->settings->get( 'lead_require_phone', true );
-		$missing       = array();
-		if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
-			$missing[] = 'name';
-		}
-		if ( '' === trim( (string) ( $lead['email'] ?? '' ) ) ) {
-			$missing[] = 'email';
-		}
-		if ( $require_phone && '' === trim( (string) ( $lead['phone'] ?? '' ) ) ) {
-			$missing[] = 'phone number';
-		}
-		if ( '' === trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
-			$missing[] = 'what they need help with';
-		}
 
 		$lines   = array();
 		$lines[] = 'LEAD CAPTURE (mandatory for genuine service enquiries):';
@@ -121,6 +108,8 @@ final class Prompt_Builder {
 		$lines[] = 'Goal fields: full name, email address' . ( $require_phone ? ', phone number' : '' ) . ', and a short description of their enquiry/job.';
 		$lines[] = 'Ask for at most one missing detail at a time, woven into a helpful reply.';
 		$lines[] = 'If they already gave a detail, do not ask for it again.';
+		$lines[] = 'If they only said they need an electrician/plumber/etc without the actual job (e.g. rewiring, sockets), ask what they need help with before asking for name or contact details.';
+		$lines[] = 'Keep replies short: one brief acknowledgment + one question. Do not mention the contact form unless they ask how else to get in touch.';
 		$lines[] = 'When you have enough to help them book/quote, confirm you will pass their details to the team.';
 
 		if ( ! empty( $lead['sent'] ) ) {
@@ -140,6 +129,28 @@ final class Prompt_Builder {
 		}
 		if ( '' !== trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
 			$have[] = 'enquiry=(captured)';
+		}
+
+		// Prefer name/email/phone only after there is a concrete job description.
+		$enquiry_text = trim( (string) ( $lead['enquiry'] ?? '' ) );
+		$missing      = array();
+		$thin         = ( '' === $enquiry_text ) || str_word_count( strtolower( $enquiry_text ) ) < 4;
+		$trade_only   = (bool) preg_match( '/\b(electrician|plumber|builder|heating engineer)s?\b/i', $enquiry_text )
+			&& ! (bool) preg_match( '/\b(rewir|wiring|install|repair|socket|fuse|room|kitchen|bathroom|quote|fault|leak|boiler)\w*\b/i', $enquiry_text );
+
+		if ( '' === $enquiry_text || $thin || $trade_only ) {
+			$missing[] = 'what they need help with (specific job details)';
+		}
+		if ( ! in_array( 'what they need help with (specific job details)', $missing, true ) ) {
+			if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
+				$missing[] = 'name';
+			}
+			if ( '' === trim( (string) ( $lead['email'] ?? '' ) ) ) {
+				$missing[] = 'email';
+			}
+			if ( $require_phone && '' === trim( (string) ( $lead['phone'] ?? '' ) ) ) {
+				$missing[] = 'phone number';
+			}
 		}
 
 		if ( $have ) {

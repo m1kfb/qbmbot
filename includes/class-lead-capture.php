@@ -107,6 +107,9 @@ final class Lead_Capture {
 	 */
 	public function missing_fields( array $lead ): array {
 		$missing = array();
+		if ( ! $this->enquiry_ready( $lead ) ) {
+			$missing[] = 'enquiry';
+		}
 		if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
 			$missing[] = 'name';
 		}
@@ -118,10 +121,20 @@ final class Lead_Capture {
 				$missing[] = 'phone';
 			}
 		}
-		if ( '' === trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
-			$missing[] = 'enquiry';
-		}
 		return $missing;
+	}
+
+	/**
+	 * Whether the enquiry has enough job detail to proceed to contact fields.
+	 *
+	 * @param array<string, mixed> $lead Lead.
+	 */
+	public function enquiry_ready( array $lead ): bool {
+		$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
+		if ( '' === $enquiry ) {
+			return false;
+		}
+		return ! $this->is_thin_enquiry( $enquiry );
 	}
 
 	/**
@@ -209,6 +222,80 @@ final class Lead_Capture {
 	}
 
 	/**
+	 * Vague “I need an electrician” style lines need a follow-up before contact details.
+	 *
+	 * @param string $enquiry Enquiry text.
+	 */
+	private function is_thin_enquiry( string $enquiry ): bool {
+		$text = strtolower( trim( preg_replace( '/\s+/', ' ', $enquiry ) ?? $enquiry ) );
+		if ( '' === $text ) {
+			return true;
+		}
+
+		$hints = array(
+			'rewir',
+			'wiring',
+			'install',
+			'repair',
+			'fix',
+			'socket',
+			'fuse',
+			'light',
+			'boiler',
+			'leak',
+			'quote',
+			'bathroom',
+			'kitchen',
+			'room',
+			'house',
+			'consumer',
+			'shower',
+			'tap',
+			'radiator',
+			'fault',
+			'emergency',
+			'urgent',
+			'inspect',
+			'certificate',
+			'cu ',
+			'ebic',
+			'pat ',
+			'switch',
+			'cooker',
+			'oven',
+			'extension',
+			'outdoor',
+			'garden',
+		);
+		foreach ( $hints as $hint ) {
+			if ( false !== strpos( $text, $hint ) ) {
+				return false;
+			}
+		}
+
+		if ( str_word_count( $text ) >= 8 ) {
+			return false;
+		}
+
+		$stripped = preg_replace( '/^(?:hi|hello|hey)[,!.\s]*/', '', $text ) ?? $text;
+		$stripped = preg_replace( '/^(?:i need|i\'m looking for|looking for|need|want|can you|could you|help with|i would like|i\'d like)\s+/', '', $stripped ) ?? $stripped;
+		$stripped = preg_replace( '/^(?:an?|the|some)\s+/', '', trim( $stripped ) ) ?? $stripped;
+		$stripped = trim( $stripped, " \t.,!" );
+
+		$trade = strtolower( trim( (string) $this->settings->get( 'business_trade', '' ) ) );
+		if ( '' !== $trade && ( $stripped === $trade || $stripped === $trade . 's' || $text === $trade ) ) {
+			return true;
+		}
+
+		$generic = array( 'electrician', 'electricians', 'plumber', 'plumbers', 'builder', 'builders', 'help', 'service', 'services' );
+		if ( in_array( $stripped, $generic, true ) ) {
+			return true;
+		}
+
+		return strlen( $stripped ) < 12;
+	}
+
+	/**
 	 * Extract email address.
 	 *
 	 * @param string $text Text.
@@ -247,7 +334,7 @@ final class Lead_Capture {
 	private function extract_name( string $message, array $history ): string {
 		$text = trim( $message );
 
-		if ( preg_match( '/\b(?:my name is|i am|i\'m|this is)\s+([A-Za-z][A-Za-z\'\-]+(?:\s+[A-Za-z][A-Za-z\'\-]+){0,2})\b/i', $text, $m ) ) {
+		if ( preg_match( '/\b(?:my name is|i am|i\'m|this is|it\'s|its)\s+([A-Za-z][A-Za-z\'\-]+(?:\s+[A-Za-z][A-Za-z\'\-]+){0,2})\b/i', $text, $m ) ) {
 			return $this->sanitize_name( $m[1] );
 		}
 
@@ -255,10 +342,18 @@ final class Lead_Capture {
 			return $this->sanitize_name( $m[1] );
 		}
 
+		if ( preg_match( '/^([A-Za-z][A-Za-z\'\-]+(?:\s+[A-Za-z][A-Za-z\'\-]+){0,2})\s+here\.?$/i', $text, $m ) ) {
+			return $this->sanitize_name( $m[1] );
+		}
+
 		$prev = $this->previous_assistant_message( $history );
 		if ( $prev && preg_match( '/\b(name|called)\b/i', $prev ) ) {
-			if ( preg_match( '/^[A-Za-z][A-Za-z\'\-]+(?:\s+[A-Za-z][A-Za-z\'\-]+){0,2}$/', $text ) ) {
-				return $this->sanitize_name( $text );
+			$candidate = $text;
+			if ( preg_match( '/^(?:it\'s|its|i\'m|i am)\s+(.+)$/i', $candidate, $m ) ) {
+				$candidate = trim( $m[1] );
+			}
+			if ( preg_match( '/^[A-Za-z][A-Za-z\'\-]+(?:\s+[A-Za-z][A-Za-z\'\-]+){0,2}\.?$/', $candidate ) ) {
+				return $this->sanitize_name( rtrim( $candidate, '.' ) );
 			}
 		}
 

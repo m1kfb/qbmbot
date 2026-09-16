@@ -33,89 +33,276 @@ final class Chat_Fallback {
 	/**
 	 * Generate a fallback chat reply for a visitor message.
 	 *
-	 * @param string                    $message Visitor message.
-	 * @param array<string, mixed>|null $lead    Optional lead progress.
+	 * @param string                    $message     Visitor message.
+	 * @param array<string, mixed>|null $lead        Lead state after this turn.
+	 * @param array<string, mixed>|null $lead_before Lead state before this turn.
 	 */
-	public function reply( string $message, ?array $lead = null ): string {
-		$name     = $this->business_name();
+	public function reply( string $message, ?array $lead = null, ?array $lead_before = null ): string {
+		if ( $this->settings->get( 'lead_capture_enabled', true ) && is_array( $lead ) ) {
+			return $this->lead_reply( $message, $lead, is_array( $lead_before ) ? $lead_before : array() );
+		}
+
+		return $this->intro_or_generic( $message );
+	}
+
+	/**
+	 * Conversational lead-capture replies: short ack + one next question.
+	 *
+	 * @param string               $message     Message.
+	 * @param array<string, mixed> $lead        Lead after turn.
+	 * @param array<string, mixed> $lead_before Lead before turn.
+	 */
+	private function lead_reply( string $message, array $lead, array $lead_before ): string {
+		if ( ! empty( $lead['sent'] ) ) {
+			$name = trim( (string) ( $lead['name'] ?? '' ) );
+			if ( '' !== $name ) {
+				return sprintf(
+					/* translators: %s: visitor first name */
+					__( 'Thanks %s — we have your details and the team will be in touch soon.', 'qbmbot' ),
+					$this->first_name( $name )
+				);
+			}
+			return __( 'Thanks — we have your details and the team will be in touch soon.', 'qbmbot' );
+		}
+
+		$filled = $this->fields_just_filled( $lead_before, $lead );
+		$ask    = $this->next_lead_question( $lead );
+		$ack    = $this->acknowledgment( $message, $lead, $filled );
+
+		if ( '' === $ask ) {
+			return $ack !== '' ? $ack : $this->intro_or_generic( $message );
+		}
+
+		if ( '' === $ack ) {
+			return $ask;
+		}
+
+		return trim( $ack . ' ' . $ask );
+	}
+
+	/**
+	 * Short acknowledgment for what the visitor just shared.
+	 *
+	 * @param string               $message Message.
+	 * @param array<string, mixed> $lead    Lead after.
+	 * @param array<int, string>   $filled  Fields filled this turn.
+	 */
+	private function acknowledgment( string $message, array $lead, array $filled ): string {
+		$name = trim( (string) ( $lead['name'] ?? '' ) );
+
+		if ( in_array( 'name', $filled, true ) && '' !== $name ) {
+			return sprintf(
+				/* translators: %s: visitor first name */
+				__( 'Thanks, %s.', 'qbmbot' ),
+				$this->first_name( $name )
+			);
+		}
+
+		if ( in_array( 'email', $filled, true ) ) {
+			return __( 'Got it, thanks.', 'qbmbot' );
+		}
+
+		if ( in_array( 'phone', $filled, true ) ) {
+			return __( 'Perfect, thanks.', 'qbmbot' );
+		}
+
+		if ( in_array( 'enquiry', $filled, true ) ) {
+			$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
+			$snippet = $this->short_job_label( $enquiry !== '' ? $enquiry : $message );
+			if ( '' !== $snippet ) {
+				return sprintf(
+					/* translators: %s: short job summary */
+					__( 'Thanks — %s is something we can help with.', 'qbmbot' ),
+					$snippet
+				);
+			}
+			return __( 'Thanks, that helps.', 'qbmbot' );
+		}
+
+		// First useful turn: introduce the business briefly when they mention the trade/area.
 		$trade    = trim( (string) $this->settings->get( 'business_trade', '' ) );
 		$services = trim( (string) $this->settings->get( 'business_services', '' ) );
 		$area     = trim( (string) $this->settings->get( 'business_service_area', '' ) );
 		$needle   = strtolower( $message );
 
-		$service_match = $this->mentions_service( $needle, $trade, $services );
-		$area_match    = $this->mentions_area( $needle, $area );
+		if ( $this->mentions_service( $needle, $trade, $services ) ) {
+			$parts   = array();
+			$parts[] = sprintf(
+				/* translators: 1: business name, 2: trade/services */
+				__( 'Thanks for getting in touch — %1$s can help with %2$s.', 'qbmbot' ),
+				$this->business_name(),
+				$this->service_summary( $trade, $services )
+			);
+			if ( '' !== $area ) {
+				$parts[] = sprintf(
+					/* translators: %s: service area */
+					__( 'We cover %s.', 'qbmbot' ),
+					$area
+				);
+			}
+			return implode( ' ', $parts );
+		}
 
-		if ( $service_match && $area_match ) {
-			$base = sprintf(
-				/* translators: 1: business name, 2: trade/services summary, 3: service area */
-				__( 'Thanks for getting in touch. %1$s covers %3$s for %2$s.', 'qbmbot' ),
-				$name,
-				$this->service_summary( $trade, $services ),
+		if ( $this->mentions_area( $needle, $area ) ) {
+			return sprintf(
+				/* translators: 1: business name, 2: service area */
+				__( 'Thanks — %1$s covers %2$s.', 'qbmbot' ),
+				$this->business_name(),
 				$area
 			);
-		} elseif ( $service_match ) {
-			$base = sprintf(
-				/* translators: 1: business name, 2: trade/services summary, 3: service area or fallback phrase */
-				__( 'Thanks for your enquiry. %1$s provides %2$s. %3$s', 'qbmbot' ),
-				$name,
-				$this->service_summary( $trade, $services ),
-				'' !== $area
-					? sprintf(
-						/* translators: %s: service area */
-						__( 'We cover %s.', 'qbmbot' ),
-						$area
-					)
-					: ''
-			);
-		} elseif ( $area_match ) {
-			$base = sprintf(
-				/* translators: 1: business name, 2: service area, 3: trade or generic services phrase */
-				__( 'Thanks for your message. %1$s covers %2$s for %3$s.', 'qbmbot' ),
-				$name,
-				$area,
-				'' !== $trade ? $trade : __( 'our services', 'qbmbot' )
-			);
-		} else {
-			$base = (string) $this->settings->get(
-				'chat_fallback_message',
-				__( 'Thanks for your message. Please share a few more details or use the contact form on our website and the team will get back to you soon.', 'qbmbot' )
-			);
 		}
 
-		$ask = $this->next_lead_question( $lead );
-		if ( '' !== $ask ) {
-			return trim( $base . ' ' . $ask );
-		}
-
-		return trim( $base );
+		return '';
 	}
 
 	/**
-	 * Ask for the next missing lead field.
+	 * Ask for the next missing lead field only.
 	 *
-	 * @param array<string, mixed>|null $lead Lead.
+	 * @param array<string, mixed> $lead Lead.
 	 */
-	private function next_lead_question( ?array $lead ): string {
-		if ( ! $this->settings->get( 'lead_capture_enabled', true ) || ! is_array( $lead ) ) {
-			return '';
-		}
-		if ( ! empty( $lead['sent'] ) ) {
-			return __( 'We have your details and the team will be in touch.', 'qbmbot' );
-		}
-		if ( '' === trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
+	private function next_lead_question( array $lead ): string {
+		$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
+		if ( '' === $enquiry || $this->is_thin_enquiry( $enquiry ) ) {
 			return __( 'Could you tell us a little more about what you need help with?', 'qbmbot' );
 		}
 		if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
 			return __( 'What name should we use for this enquiry?', 'qbmbot' );
 		}
-		if ( '' === trim( (string) ( $lead['email'] ?? '' ) ) ) {
+		if ( '' === trim( (string) ( $lead['email'] ?? '' ) ) || ! is_email( (string) ( $lead['email'] ?? '' ) ) ) {
 			return __( 'What is the best email address to reach you on?', 'qbmbot' );
 		}
 		if ( $this->settings->get( 'lead_require_phone', true ) && '' === trim( (string) ( $lead['phone'] ?? '' ) ) ) {
 			return __( 'And what is the best phone number to call you on?', 'qbmbot' );
 		}
 		return __( 'Thanks — we will pass this to the team now.', 'qbmbot' );
+	}
+
+	/**
+	 * Mirror Lead_Capture thin-enquiry check for offline flow.
+	 *
+	 * @param string $enquiry Enquiry.
+	 */
+	private function is_thin_enquiry( string $enquiry ): bool {
+		$text = strtolower( trim( preg_replace( '/\s+/', ' ', $enquiry ) ?? $enquiry ) );
+		if ( '' === $text ) {
+			return true;
+		}
+
+		$hints = array(
+			'rewir',
+			'wiring',
+			'install',
+			'repair',
+			'fix',
+			'socket',
+			'fuse',
+			'light',
+			'boiler',
+			'leak',
+			'quote',
+			'bathroom',
+			'kitchen',
+			'room',
+			'house',
+			'consumer',
+			'shower',
+			'tap',
+			'radiator',
+			'fault',
+			'emergency',
+			'urgent',
+			'inspect',
+			'certificate',
+			'switch',
+			'cooker',
+			'oven',
+			'extension',
+			'outdoor',
+			'garden',
+		);
+		foreach ( $hints as $hint ) {
+			if ( false !== strpos( $text, $hint ) ) {
+				return false;
+			}
+		}
+
+		if ( str_word_count( $text ) >= 8 ) {
+			return false;
+		}
+
+		$stripped = preg_replace( '/^(?:hi|hello|hey)[,!.\s]*/', '', $text ) ?? $text;
+		$stripped = preg_replace( '/^(?:i need|i\'m looking for|looking for|need|want|can you|could you|help with|i would like|i\'d like)\s+/', '', $stripped ) ?? $stripped;
+		$stripped = preg_replace( '/^(?:an?|the|some)\s+/', '', trim( $stripped ) ) ?? $stripped;
+		$stripped = trim( $stripped, " \t.,!" );
+
+		$trade = strtolower( trim( (string) $this->settings->get( 'business_trade', '' ) ) );
+		if ( '' !== $trade && ( $stripped === $trade || $stripped === $trade . 's' || $text === $trade ) ) {
+			return true;
+		}
+
+		$generic = array( 'electrician', 'electricians', 'plumber', 'plumbers', 'builder', 'builders', 'help', 'service', 'services' );
+		if ( in_array( $stripped, $generic, true ) ) {
+			return true;
+		}
+
+		return strlen( $stripped ) < 12;
+	}
+
+	/**
+	 * Fields that became non-empty this turn.
+	 *
+	 * @param array<string, mixed> $before Before.
+	 * @param array<string, mixed> $after  After.
+	 * @return array<int, string>
+	 */
+	private function fields_just_filled( array $before, array $after ): array {
+		$fields = array( 'name', 'email', 'phone', 'enquiry' );
+		$filled = array();
+		foreach ( $fields as $field ) {
+			$was = trim( (string) ( $before[ $field ] ?? '' ) );
+			$now = trim( (string) ( $after[ $field ] ?? '' ) );
+			if ( '' === $was && '' !== $now ) {
+				$filled[] = $field;
+			} elseif ( 'enquiry' === $field && '' !== $now && $now !== $was && strlen( $now ) > strlen( $was ) + 8 ) {
+				// Enquiry grew meaningfully (new detail).
+				$filled[] = 'enquiry';
+			}
+		}
+		return $filled;
+	}
+
+	/**
+	 * Opening / non-lead generic reply.
+	 *
+	 * @param string $message Message.
+	 */
+	private function intro_or_generic( string $message ): string {
+		$trade    = trim( (string) $this->settings->get( 'business_trade', '' ) );
+		$services = trim( (string) $this->settings->get( 'business_services', '' ) );
+		$area     = trim( (string) $this->settings->get( 'business_service_area', '' ) );
+		$needle   = strtolower( $message );
+
+		if ( $this->mentions_service( $needle, $trade, $services ) ) {
+			$out = sprintf(
+				/* translators: 1: business name, 2: trade/services */
+				__( 'Thanks for getting in touch — %1$s can help with %2$s.', 'qbmbot' ),
+				$this->business_name(),
+				$this->service_summary( $trade, $services )
+			);
+			if ( '' !== $area ) {
+				$out .= ' ' . sprintf(
+					/* translators: %s: service area */
+					__( 'We cover %s.', 'qbmbot' ),
+					$area
+				);
+			}
+			return $out;
+		}
+
+		return (string) $this->settings->get(
+			'chat_fallback_message',
+			__( 'Thanks for your message. How can we help today?', 'qbmbot' )
+		);
 	}
 
 	/**
@@ -127,6 +314,35 @@ final class Chat_Fallback {
 			return $name;
 		}
 		return wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
+	}
+
+	/**
+	 * First name token for friendly thanks.
+	 *
+	 * @param string $name Full name.
+	 */
+	private function first_name( string $name ): string {
+		$parts = preg_split( '/\s+/', trim( $name ) ) ?: array();
+		$first = (string) ( $parts[0] ?? $name );
+		return $first !== '' ? $first : $name;
+	}
+
+	/**
+	 * Compact job label for acknowledgments.
+	 *
+	 * @param string $text Enquiry text.
+	 */
+	private function short_job_label( string $text ): string {
+		$text = trim( preg_replace( '/\s+/', ' ', $text ) ?? $text );
+		$text = preg_replace( '/^(?:i need|i\'m looking for|looking for|need|want|can you|could you)\s+/i', '', $text ) ?? $text;
+		$text = trim( $text, " \t\n\r\0\x0B.," );
+		if ( '' === $text ) {
+			return '';
+		}
+		if ( strlen( $text ) > 60 ) {
+			$text = rtrim( substr( $text, 0, 57 ) ) . '…';
+		}
+		return lcfirst( $text );
 	}
 
 	/**
@@ -206,6 +422,8 @@ final class Chat_Fallback {
 			$pairs = array(
 				array( 'electrician', 'electric' ),
 				array( 'electrical', 'electric' ),
+				array( 'rewiring', 'electric' ),
+				array( 'rewire', 'electric' ),
 				array( 'plumber', 'plumb' ),
 				array( 'plumbing', 'plumb' ),
 				array( 'heating', 'heat' ),

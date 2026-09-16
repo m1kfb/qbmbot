@@ -97,10 +97,17 @@ final class Settings {
 			'appearance_logo'           => '',
 			'appearance_title'          => 'Chat with us',
 			'appearance_subtitle'       => 'Ask a question and we will help.',
+			'appearance_position'       => 'left',
 			'appearance_offset_x'       => 20,
 			'appearance_offset_y'       => 20,
 			'appearance_custom_css'     => '',
 			'welcome_message'           => 'Hi! How can we help today?',
+			'chat_fallback_message'     => 'Thanks for your message. Please share a few more details or use the contact form on our website and the team will get back to you soon.',
+			'lead_capture_enabled'      => true,
+			'lead_require_phone'        => true,
+			'lead_notify_email'         => '',
+			'lead_email_subject'        => 'New chat enquiry',
+			'lead_capture_guidance'     => 'When the visitor has a genuine job enquiry, gather their name, email, and phone naturally so the team can call them back. Prefer one question at a time.',
 			'blocked_message'           => 'Sorry, chat is temporarily unavailable. Please try again later or use the contact form.',
 			'delete_data_on_uninstall'  => false,
 		);
@@ -184,9 +191,19 @@ final class Settings {
 			'logo'       => (string) $this->get( 'appearance_logo' ),
 			'title'      => (string) $this->get( 'appearance_title' ),
 			'subtitle'   => (string) $this->get( 'appearance_subtitle' ),
+			'position'   => $this->normalized_position( (string) $this->get( 'appearance_position', 'left' ) ),
 			'offsetX'    => (int) $this->get( 'appearance_offset_x' ),
 			'offsetY'    => (int) $this->get( 'appearance_offset_y' ),
 			'welcome'    => (string) $this->get( 'welcome_message' ),
 		);
+	}
+
+	/**
+	 * Normalize widget horizontal position.
+	 *
+	 * @param string $position Raw position.
+	 */
+	public function normalized_position( string $position ): string {
+		return 'right' === $position ? 'right' : 'left';
 	}
 }

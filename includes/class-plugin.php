@@ -45,10 +45,12 @@ final class Plugin {
 		$limiter  = new Rate_Limiter( $settings );
 		$router   = new AI\Router( $settings );
 		$prompts  = new AI\Prompt_Builder( $settings, $faq, $content );
+		$fallback = new Chat_Fallback( $settings );
 		$mailer   = new Mailer( $settings );
+		$leads    = new Lead_Capture( $settings, $mailer, $logger );
 
 		( new Assets( $settings, $faq ) )->register();
-		( new REST( $settings, $faq, $spam, $limiter, $router, $prompts, $logger ) )->register();
+		( new REST( $settings, $faq, $spam, $limiter, $router, $prompts, $fallback, $leads, $logger ) )->register();
 		( new CF7( $settings, $spam, $limiter, $router, $prompts, $mailer, $logger ) )->register();
 		( new Admin( $settings, $faq, $logger, $limiter ) )->register();
 		( new Updater() )->register();

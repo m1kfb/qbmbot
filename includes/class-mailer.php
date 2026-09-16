@@ -38,6 +38,35 @@ final class Mailer {
 	 * @param string $subject Optional subject override.
 	 */
 	public function send_auto_reply( string $to, string $body, string $subject = '' ): bool {
+		return $this->send( $to, $body, $subject, array() );
+	}
+
+	/**
+	 * Send chat lead notification to the business.
+	 *
+	 * @param string $to           Business recipient.
+	 * @param string $subject      Subject.
+	 * @param string $body         Body.
+	 * @param string $reply_to     Customer email for Reply-To.
+	 */
+	public function send_lead_notification( string $to, string $subject, string $body, string $reply_to = '' ): bool {
+		$extra = array();
+		$reply_to = sanitize_email( $reply_to );
+		if ( is_email( $reply_to ) ) {
+			$extra[] = 'Reply-To: ' . $reply_to;
+		}
+		return $this->send( $to, $body, $subject, $extra );
+	}
+
+	/**
+	 * Shared wp_mail sender.
+	 *
+	 * @param string               $to      Recipient.
+	 * @param string               $body    Body.
+	 * @param string               $subject Subject.
+	 * @param array<int, string>   $extra   Extra headers.
+	 */
+	private function send( string $to, string $body, string $subject, array $extra ): bool {
 		$to = sanitize_email( $to );
 		if ( ! is_email( $to ) ) {
 			return false;
@@ -47,7 +76,7 @@ final class Mailer {
 			$subject = (string) $this->settings->get( 'cf7_email_subject', 'Re: Your enquiry' );
 		}
 
-		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		$headers = array_merge( array( 'Content-Type: text/plain; charset=UTF-8' ), $extra );
 
 		$from_name  = (string) $this->settings->get( 'cf7_from_name', '' );
 		$from_email = sanitize_email( (string) $this->settings->get( 'cf7_from_email', '' ) );

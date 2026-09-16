@@ -59,6 +59,13 @@ final class Router {
 	}
 
 	/**
+	 * Whether the active provider has credentials configured.
+	 */
+	public function is_active_configured(): bool {
+		return $this->active()->is_configured();
+	}
+
+	/**
 	 * Complete via active provider.
 	 *
 	 * @param string               $system   System prompt.

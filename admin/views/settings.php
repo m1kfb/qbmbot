@@ -118,6 +118,41 @@ if ( ! isset( $tabs[ $tab ] ) ) {
 							<td><input class="regular-text" type="text" name="welcome_message" id="welcome_message" value="<?php echo esc_attr( (string) $settings['welcome_message'] ); ?>" /></td>
 						</tr>
 						<tr>
+							<th scope="row"><label for="chat_fallback_message"><?php echo esc_html__( 'Offline chat fallback', 'qbmbot' ); ?></label></th>
+							<td>
+								<textarea class="large-text" rows="3" name="chat_fallback_message" id="chat_fallback_message"><?php echo esc_textarea( (string) $settings['chat_fallback_message'] ); ?></textarea>
+								<p class="description"><?php echo esc_html__( 'Used when AI is unavailable, or for general enquiries that do not match your business profile.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php echo esc_html__( 'Chat lead capture', 'qbmbot' ); ?></th>
+							<td>
+								<label><input type="checkbox" name="lead_capture_enabled" value="1" <?php checked( ! empty( $settings['lead_capture_enabled'] ) ); ?> /> <?php echo esc_html__( 'Collect name, email, phone and enquiry through chat, then email the team', 'qbmbot' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php echo esc_html__( 'Require phone', 'qbmbot' ); ?></th>
+							<td><label><input type="checkbox" name="lead_require_phone" value="1" <?php checked( ! empty( $settings['lead_require_phone'] ) ); ?> /> <?php echo esc_html__( 'Require a phone number before sending the lead email', 'qbmbot' ); ?></label></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="lead_notify_email"><?php echo esc_html__( 'Lead email To address', 'qbmbot' ); ?></label></th>
+							<td>
+								<input class="regular-text" type="email" name="lead_notify_email" id="lead_notify_email" value="<?php echo esc_attr( (string) $settings['lead_notify_email'] ); ?>" placeholder="<?php echo esc_attr__( 'Leave blank to use Contact Form 7 Mail recipient', 'qbmbot' ); ?>" />
+								<p class="description"><?php echo esc_html__( 'Blank = same address as your Contact Form 7 form notification (Mail → To). Falls back to the WordPress admin email.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="lead_email_subject"><?php echo esc_html__( 'Lead email subject', 'qbmbot' ); ?></label></th>
+							<td><input class="regular-text" type="text" name="lead_email_subject" id="lead_email_subject" value="<?php echo esc_attr( (string) $settings['lead_email_subject'] ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="lead_capture_guidance"><?php echo esc_html__( 'Lead capture guidance', 'qbmbot' ); ?></label></th>
+							<td>
+								<textarea class="large-text" rows="3" name="lead_capture_guidance" id="lead_capture_guidance"><?php echo esc_textarea( (string) $settings['lead_capture_guidance'] ); ?></textarea>
+								<p class="description"><?php echo esc_html__( 'Optional instructions for how the chat should ask for details.', 'qbmbot' ); ?></p>
+							</td>
+						</tr>
+						<tr>
 							<th scope="row"><label for="blocked_message"><?php echo esc_html__( 'Blocked / unavailable message', 'qbmbot' ); ?></label></th>
 							<td><input class="large-text" type="text" name="blocked_message" id="blocked_message" value="<?php echo esc_attr( (string) $settings['blocked_message'] ); ?>" /></td>
 						</tr>
@@ -438,10 +473,20 @@ if ( ! isset( $tabs[ $tab ] ) ) {
 							<td><input class="large-text" type="text" name="appearance_subtitle" id="appearance_subtitle" value="<?php echo esc_attr( (string) $settings['appearance_subtitle'] ); ?>" /></td>
 						</tr>
 						<tr>
+							<th scope="row"><label for="appearance_position"><?php echo esc_html__( 'Widget position', 'qbmbot' ); ?></label></th>
+							<td>
+								<select name="appearance_position" id="appearance_position">
+									<option value="left" <?php selected( (string) ( $settings['appearance_position'] ?? 'left' ), 'left' ); ?>><?php echo esc_html__( 'Bottom left', 'qbmbot' ); ?></option>
+									<option value="right" <?php selected( (string) ( $settings['appearance_position'] ?? 'left' ), 'right' ); ?>><?php echo esc_html__( 'Bottom right', 'qbmbot' ); ?></option>
+								</select>
+							</td>
+						</tr>
+						<tr>
 							<th scope="row"><?php echo esc_html__( 'Offsets (px)', 'qbmbot' ); ?></th>
 							<td>
-								<label><?php echo esc_html__( 'Left', 'qbmbot' ); ?> <input type="number" name="appearance_offset_x" value="<?php echo esc_attr( (string) (int) $settings['appearance_offset_x'] ); ?>" /></label>
+								<label><?php echo esc_html__( 'From edge', 'qbmbot' ); ?> <input type="number" name="appearance_offset_x" value="<?php echo esc_attr( (string) (int) $settings['appearance_offset_x'] ); ?>" /></label>
 								<label><?php echo esc_html__( 'Bottom', 'qbmbot' ); ?> <input type="number" name="appearance_offset_y" value="<?php echo esc_attr( (string) (int) $settings['appearance_offset_y'] ); ?>" /></label>
+								<p class="description"><?php echo esc_html__( '“From edge” is measured from the left or right side, depending on position.', 'qbmbot' ); ?></p>
 							</td>
 						</tr>
 						<tr>

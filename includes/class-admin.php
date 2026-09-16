@@ -56,6 +56,41 @@ final class Admin {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
 		add_action( 'admin_init', array( $this, 'handle_save' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_action( 'admin_notices', array( $this, 'maybe_notice_missing_ai_key' ) );
+	}
+
+	/**
+	 * Warn admins when chat AI is not configured.
+	 */
+	public function maybe_notice_missing_ai_key(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( $screen && 'plugins' !== $screen->id && 0 !== strpos( (string) $screen->id, 'toplevel_page_qbmbot' ) ) {
+			return;
+		}
+
+		if ( ! $this->settings->get( 'widget_enabled' ) ) {
+			return;
+		}
+
+		$provider = (string) $this->settings->get( 'active_provider', 'openai' );
+		$key_name = 'anthropic' === $provider ? 'anthropic_api_key' : 'openai_api_key';
+		if ( '' !== trim( (string) $this->settings->get( $key_name, '' ) ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-warning"><p>';
+		echo wp_kses_post(
+			sprintf(
+				/* translators: %s: admin settings link */
+				__( 'QBMBOT chat is enabled but no AI API key is configured. Chat will use offline fallback replies until you add a key under %s.', 'qbmbot' ),
+				'<a href="' . esc_url( admin_url( 'admin.php?page=qbmbot&tab=providers' ) ) . '">' . esc_html__( 'AI Providers', 'qbmbot' ) . '</a>'
+			)
+		);
+		echo '</p></div>';
 	}
 
 	/**
@@ -218,6 +253,12 @@ final class Admin {
 				'cf7_enabled'              => ! empty( $_POST['cf7_enabled'] ),
 				'global_prompt'            => sanitize_textarea_field( wp_unslash( (string) ( $_POST['global_prompt'] ?? '' ) ) ),
 				'welcome_message'          => sanitize_text_field( wp_unslash( (string) ( $_POST['welcome_message'] ?? '' ) ) ),
+				'chat_fallback_message'    => sanitize_textarea_field( wp_unslash( (string) ( $_POST['chat_fallback_message'] ?? '' ) ) ),
+				'lead_capture_enabled'     => ! empty( $_POST['lead_capture_enabled'] ),
+				'lead_require_phone'       => ! empty( $_POST['lead_require_phone'] ),
+				'lead_notify_email'        => sanitize_email( wp_unslash( (string) ( $_POST['lead_notify_email'] ?? '' ) ) ),
+				'lead_email_subject'       => sanitize_text_field( wp_unslash( (string) ( $_POST['lead_email_subject'] ?? '' ) ) ),
+				'lead_capture_guidance'    => sanitize_textarea_field( wp_unslash( (string) ( $_POST['lead_capture_guidance'] ?? '' ) ) ),
 				'blocked_message'          => sanitize_text_field( wp_unslash( (string) ( $_POST['blocked_message'] ?? '' ) ) ),
 				'delete_data_on_uninstall' => ! empty( $_POST['delete_data_on_uninstall'] ),
 			)
@@ -375,6 +416,9 @@ final class Admin {
 				'appearance_logo'       => esc_url_raw( wp_unslash( (string) ( $_POST['appearance_logo'] ?? '' ) ) ),
 				'appearance_title'      => sanitize_text_field( wp_unslash( (string) ( $_POST['appearance_title'] ?? '' ) ) ),
 				'appearance_subtitle'   => sanitize_text_field( wp_unslash( (string) ( $_POST['appearance_subtitle'] ?? '' ) ) ),
+				'appearance_position'   => $this->settings->normalized_position(
+					sanitize_key( wp_unslash( (string) ( $_POST['appearance_position'] ?? 'left' ) ) )
+				),
 				'appearance_offset_x'   => max( 0, min( 120, (int) ( $_POST['appearance_offset_x'] ?? 20 ) ) ),
 				'appearance_offset_y'   => max( 0, min( 120, (int) ( $_POST['appearance_offset_y'] ?? 20 ) ) ),
 				'appearance_custom_css' => $this->sanitize_css( wp_unslash( (string) ( $_POST['appearance_custom_css'] ?? '' ) ) ),

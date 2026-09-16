@@ -29,6 +29,27 @@ final class Updater {
 
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'inject_update' ) );
 		add_filter( 'plugins_api', array( $this, 'plugin_info' ), 10, 3 );
+		// When WordPress force-checks for updates, drop our GitHub cache too.
+		add_action( 'delete_site_transient_update_plugins', array( $this, 'clear_cache' ) );
+		add_action( 'load-update-core.php', array( $this, 'maybe_force_refresh' ) );
+		add_action( 'load-plugins.php', array( $this, 'maybe_force_refresh' ) );
+	}
+
+	/**
+	 * Clear cached GitHub release metadata.
+	 */
+	public function clear_cache(): void {
+		delete_transient( self::CACHE_KEY );
+	}
+
+	/**
+	 * Bust cache when an admin clicks “Check again”.
+	 */
+	public function maybe_force_refresh(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- WP core update screens use force-check.
+		if ( ! empty( $_GET['force-check'] ) ) {
+			$this->clear_cache();
+		}
 	}
 
 	/**
@@ -143,6 +164,7 @@ final class Updater {
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $code ) {
+			// Do not cache failures (private repo / rate limit / outage).
 			return null;
 		}
 

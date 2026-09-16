@@ -53,6 +53,16 @@ final class REST {
 	private Prompt_Builder $prompts;
 
 	/**
+	 * @var Chat_Fallback
+	 */
+	private Chat_Fallback $fallback;
+
+	/**
+	 * @var Lead_Capture
+	 */
+	private Lead_Capture $leads;
+
+	/**
 	 * @var Logger
 	 */
 	private Logger $logger;
@@ -66,6 +76,8 @@ final class REST {
 	 * @param Rate_Limiter   $limiter  Limiter.
 	 * @param Router         $router   Router.
 	 * @param Prompt_Builder $prompts  Prompts.
+	 * @param Chat_Fallback  $fallback Fallback replies.
+	 * @param Lead_Capture   $leads    Lead capture.
 	 * @param Logger         $logger   Logger.
 	 */
 	public function __construct(
@@ -75,6 +87,8 @@ final class REST {
 		Rate_Limiter $limiter,
 		Router $router,
 		Prompt_Builder $prompts,
+		Chat_Fallback $fallback,
+		Lead_Capture $leads,
 		Logger $logger
 	) {
 		$this->settings = $settings;
@@ -83,6 +97,8 @@ final class REST {
 		$this->limiter  = $limiter;
 		$this->router   = $router;
 		$this->prompts  = $prompts;
+		$this->fallback = $fallback;
+		$this->leads    = $leads;
 		$this->logger   = $logger;
 	}
 
@@ -253,6 +269,7 @@ final class REST {
 			$this->limiter->hit( $ip, $session_id );
 			$this->append_history( $session_id, 'user', $message );
 			$this->append_history( $session_id, 'assistant', (string) $faq_item['answer'] );
+			$lead_result = $this->maybe_process_lead( $session_id, $message, $ip );
 			$this->logger->log(
 				array(
 					'channel'    => 'chat',
@@ -262,47 +279,51 @@ final class REST {
 					'ip_hash'    => Logger::hash_ip( $ip ),
 				)
 			);
-			return new WP_REST_Response(
-				array(
-					'reply'   => (string) $faq_item['answer'],
-					'blocked' => false,
-				),
-				200
-			);
+			return $this->chat_response( (string) $faq_item['answer'], $lead_result );
 		}
 
 		$this->limiter->hit( $ip, $session_id );
 
-		$history = $this->get_history( $session_id );
-		$history[] = array(
+		$history_for_lead = $this->get_history( $session_id );
+		$history_for_lead[] = array(
 			'role'    => 'user',
 			'content' => $message,
 		);
+		$lead_before = $this->leads->enabled() ? $this->leads->get_lead( $session_id ) : null;
 
-		$system = $this->prompts->chat_system( $faq_id ?: null, $message );
+		if ( ! $this->router->is_active_configured() ) {
+			return $this->respond_with_fallback(
+				$message,
+				$session_id,
+				$ip,
+				$spam['score'],
+				'missing_api_key',
+				'',
+				$lead_before
+			);
+		}
+
+		$history = $history_for_lead;
+
+		$system = $this->prompts->chat_system( $faq_id ?: null, $message, $lead_before );
 		$result = $this->router->complete( $system, $history );
 
 		if ( empty( $result['ok'] ) ) {
-			$this->logger->log(
-				array(
-					'channel'    => 'chat',
-					'status'     => 'error',
-					'reason'     => (string) ( $result['error'] ?? 'ai_failed' ),
-					'provider'   => (string) ( $result['provider'] ?? '' ),
-					'spam_score' => $spam['score'],
-					'ip_hash'    => Logger::hash_ip( $ip ),
-				)
-			);
-			return new WP_Error(
-				'qbmbot_ai_error',
-				__( 'Unable to generate a reply right now.', 'qbmbot' ),
-				array( 'status' => 502 )
+			return $this->respond_with_fallback(
+				$message,
+				$session_id,
+				$ip,
+				$spam['score'],
+				(string) ( $result['error'] ?? 'ai_failed' ),
+				(string) ( $result['provider'] ?? '' ),
+				$lead_before
 			);
 		}
 
 		$reply = (string) $result['content'];
 		$this->append_history( $session_id, 'user', $message );
 		$this->append_history( $session_id, 'assistant', $reply );
+		$lead_result = $this->maybe_process_lead( $session_id, $message, $ip );
 
 		$this->logger->log(
 			array(
@@ -315,13 +336,86 @@ final class REST {
 			)
 		);
 
-		return new WP_REST_Response(
+		return $this->chat_response( $reply, $lead_result );
+	}
+
+	/**
+	 * Return a helpful offline reply when AI is unavailable.
+	 *
+	 * @param string                    $message    User message.
+	 * @param string                    $session_id Session id.
+	 * @param string                    $ip         Client IP.
+	 * @param int                       $spam_score Spam score.
+	 * @param string                    $reason     Failure reason.
+	 * @param string                    $provider   Provider slug.
+	 * @param array<string, mixed>|null $lead       Lead state before this turn.
+	 */
+	private function respond_with_fallback(
+		string $message,
+		string $session_id,
+		string $ip,
+		int $spam_score,
+		string $reason,
+		string $provider,
+		?array $lead = null
+	): WP_REST_Response {
+		$reply = $this->fallback->reply( $message, $lead );
+
+		$this->append_history( $session_id, 'user', $message );
+		$this->append_history( $session_id, 'assistant', $reply );
+		$lead_result = $this->maybe_process_lead( $session_id, $message, $ip );
+
+		$this->logger->log(
 			array(
-				'reply'   => $reply,
-				'blocked' => false,
-			),
-			200
+				'channel'    => 'chat',
+				'status'     => 'fallback',
+				'reason'     => $reason,
+				'provider'   => $provider,
+				'spam_score' => $spam_score,
+				'ip_hash'    => Logger::hash_ip( $ip ),
+			)
 		);
+
+		return $this->chat_response( $reply, $lead_result );
+	}
+
+	/**
+	 * Process lead capture for this turn when enabled.
+	 *
+	 * @param string $session_id Session.
+	 * @param string $message    User message.
+	 * @param string $ip         IP.
+	 * @return array{sent:bool,missing:array<int,string>}|null
+	 */
+	private function maybe_process_lead( string $session_id, string $message, string $ip ): ?array {
+		if ( ! $this->leads->enabled() ) {
+			return null;
+		}
+		$result = $this->leads->process_turn( $session_id, $message, $this->get_history( $session_id ), $ip );
+		return array(
+			'sent'    => ! empty( $result['sent'] ),
+			'missing' => $result['missing'],
+		);
+	}
+
+	/**
+	 * Standard chat success payload.
+	 *
+	 * @param string                                    $reply Assistant reply.
+	 * @param array{sent:bool,missing:array<int,string>}|null $lead  Lead status.
+	 */
+	private function chat_response( string $reply, ?array $lead = null ): WP_REST_Response {
+		$payload = array(
+			'reply'   => $reply,
+			'blocked' => false,
+		);
+		if ( null !== $lead ) {
+			$payload['lead'] = array(
+				'sent'    => ! empty( $lead['sent'] ),
+				'missing' => $lead['missing'],
+			);
+		}
+		return new WP_REST_Response( $payload, 200 );
 	}
 
 	/**

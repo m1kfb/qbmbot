@@ -57,8 +57,9 @@ final class Prompt_Builder {
 	 *
 	 * @param string|null $faq_id Optional FAQ id.
 	 * @param string|null $question_text Optional question for matching / content search.
+	 * @param array<string, mixed>|null $lead Optional lead progress for capture prompts.
 	 */
-	public function chat_system( ?string $faq_id = null, ?string $question_text = null ): string {
+	public function chat_system( ?string $faq_id = null, ?string $question_text = null, ?array $lead = null ): string {
 		$parts   = array();
 		$parts[] = $this->business_identity_block();
 		$parts[] = $this->scope_rules_block();
@@ -84,9 +85,78 @@ final class Prompt_Builder {
 			$parts[] = $site;
 		}
 
+		if ( null !== $lead && ! empty( $this->settings->get( 'lead_capture_enabled', true ) ) ) {
+			$parts[] = $this->lead_capture_block( $lead );
+		}
+
 		$parts[] = 'Keep replies concise (2–4 short paragraphs max unless asked for detail). Stay in character as this business only.';
 
 		return implode( "\n\n", array_filter( array_map( 'trim', $parts ) ) );
+	}
+
+	/**
+	 * Instructions for collecting name / email / phone naturally.
+	 *
+	 * @param array<string, mixed> $lead Current lead state.
+	 */
+	private function lead_capture_block( array $lead ): string {
+		$require_phone = (bool) $this->settings->get( 'lead_require_phone', true );
+		$missing       = array();
+		if ( '' === trim( (string) ( $lead['name'] ?? '' ) ) ) {
+			$missing[] = 'name';
+		}
+		if ( '' === trim( (string) ( $lead['email'] ?? '' ) ) ) {
+			$missing[] = 'email';
+		}
+		if ( $require_phone && '' === trim( (string) ( $lead['phone'] ?? '' ) ) ) {
+			$missing[] = 'phone number';
+		}
+		if ( '' === trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
+			$missing[] = 'what they need help with';
+		}
+
+		$lines   = array();
+		$lines[] = 'LEAD CAPTURE (mandatory for genuine service enquiries):';
+		$lines[] = 'Collect the visitor\'s contact details through natural conversation — never dump a form list unless they ask.';
+		$lines[] = 'Goal fields: full name, email address' . ( $require_phone ? ', phone number' : '' ) . ', and a short description of their enquiry/job.';
+		$lines[] = 'Ask for at most one missing detail at a time, woven into a helpful reply.';
+		$lines[] = 'If they already gave a detail, do not ask for it again.';
+		$lines[] = 'When you have enough to help them book/quote, confirm you will pass their details to the team.';
+
+		if ( ! empty( $lead['sent'] ) ) {
+			$lines[] = 'Their enquiry has already been passed to the team. Thank them and answer remaining questions; do not re-ask for contact details.';
+			return implode( "\n", $lines );
+		}
+
+		$have = array();
+		if ( '' !== trim( (string) ( $lead['name'] ?? '' ) ) ) {
+			$have[] = 'name=' . (string) $lead['name'];
+		}
+		if ( '' !== trim( (string) ( $lead['email'] ?? '' ) ) ) {
+			$have[] = 'email=' . (string) $lead['email'];
+		}
+		if ( '' !== trim( (string) ( $lead['phone'] ?? '' ) ) ) {
+			$have[] = 'phone=' . (string) $lead['phone'];
+		}
+		if ( '' !== trim( (string) ( $lead['enquiry'] ?? '' ) ) ) {
+			$have[] = 'enquiry=(captured)';
+		}
+
+		if ( $have ) {
+			$lines[] = 'Already captured: ' . implode( '; ', $have );
+		}
+		if ( $missing ) {
+			$lines[] = 'Still missing (ask next, one at a time): ' . implode( ', ', $missing );
+		} else {
+			$lines[] = 'All required details are captured. Confirm the team will be in touch.';
+		}
+
+		$extra = trim( (string) $this->settings->get( 'lead_capture_guidance', '' ) );
+		if ( '' !== $extra ) {
+			$lines[] = 'Extra guidance: ' . $extra;
+		}
+
+		return implode( "\n", $lines );
 	}
 
 	/**

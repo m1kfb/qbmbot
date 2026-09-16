@@ -61,7 +61,17 @@ Enable **Source context from this WordPress site** to ground replies in publishe
 
 On each chat message or CF7 enquiry, QBMBOT searches the site for relevant content and injects plain-text excerpts into the prompt (before the LLM is called).
 
-## Chat widget
+## Chat lead capture
+
+When enabled under **General**, the chat collects **name**, **email**, **phone** (optional toggle), and the **enquiry** through natural conversation.
+
+Once those details are captured, QBMBOT emails them to:
+
+1. The **Lead email To address** if set, otherwise
+2. The Contact Form 7 form **Mail → To** recipient, otherwise
+3. The WordPress admin email
+
+Reply-To is set to the visitor’s email so you can reply directly.
 
 When enabled under **General**, the widget mounts in `wp_footer` and calls:
 

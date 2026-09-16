@@ -64,8 +64,9 @@ Suggested questions are loaded from **FAQ / Preloads**. If a FAQ has a display a
 2. On the **CF7** tab, map field names (defaults: `your-name`, `your-email`, `your-message`).
 3. Optionally restrict to specific forms (empty selection = all forms).
 4. Configure subject, From headers, and fallback body.
+5. Optionally enable **Ask for more details** / **Ask for photos** so covered-service enquiries invite a reply with missing info and images when useful.
 
-On successful mail send, QBMBOT runs spam + rate checks. If blocked, it can send the static fallback (no AI). If allowed, it generates a plain-text reply with the active AI provider and sends it via `wp_mail`.
+On successful mail send, QBMBOT runs spam + rate checks. If blocked, it can send the static fallback (no AI). If allowed, it generates a plain-text reply with the active AI provider and sends it via `wp_mail`. For in-scope service jobs, replies can ask the customer to email back relevant details and photos.
 
 Auto-replies do **not** open or update the chat widget.
 

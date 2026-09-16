@@ -404,6 +404,9 @@ final class Admin {
 				'cf7_from_email'             => sanitize_email( wp_unslash( (string) ( $_POST['cf7_from_email'] ?? '' ) ) ),
 				'cf7_fallback_body'          => sanitize_textarea_field( wp_unslash( (string) ( $_POST['cf7_fallback_body'] ?? '' ) ) ),
 				'cf7_send_fallback_on_block' => ! empty( $_POST['cf7_send_fallback_on_block'] ),
+				'cf7_ask_follow_up'          => ! empty( $_POST['cf7_ask_follow_up'] ),
+				'cf7_ask_photos'             => ! empty( $_POST['cf7_ask_photos'] ),
+				'cf7_follow_up_guidance'     => sanitize_textarea_field( wp_unslash( (string) ( $_POST['cf7_follow_up_guidance'] ?? '' ) ) ),
 			)
 		);
 	}

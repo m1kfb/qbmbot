@@ -1,0 +1,51 @@
+.qbmbot-admin .qbmbot-panel {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	padding: 16px 20px;
+	margin-top: 12px;
+}
+
+.qbmbot-faq-item {
+	border: 1px solid #dcdcde;
+	padding: 12px 14px;
+	margin-bottom: 12px;
+	background: #f6f7f7;
+}
+
+.qbmbot-faq-item .button-link-delete {
+	margin-left: 12px;
+}
+
+.qbmbot-preview {
+	margin-top: 16px;
+	max-width: 320px;
+}
+
+.qbmbot-preview-panel {
+	font-family: var(--qbmbot-font, Georgia, serif);
+	background: var(--qbmbot-panel, #f7f7f5);
+	color: var(--qbmbot-text, #1a1a1a);
+	border-radius: var(--qbmbot-radius, 12px);
+	padding: 16px;
+	border: 2px solid var(--qbmbot-primary, #1a5f4a);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.qbmbot-preview-panel strong {
+	color: var(--qbmbot-primary, #1a5f4a);
+}
+
+.qbmbot-post-checklist {
+	max-height: 220px;
+	overflow: auto;
+	border: 1px solid #dcdcde;
+	padding: 8px 10px;
+	background: #fff;
+}
+
+.qbmbot-post-checklist label {
+	display: block;
+	margin: 0 0 6px;
+}

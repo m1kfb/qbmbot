@@ -1,0 +1,223 @@
+/* QBMBOT chat widget — isolated .qbmbot-* styles for Divi compatibility */
+.qbmbot-root {
+	position: fixed !important;
+	left: var(--qbmbot-offset-x, 20px) !important;
+	bottom: var(--qbmbot-offset-y, 20px) !important;
+	right: auto !important;
+	top: auto !important;
+	z-index: 999999 !important;
+	font-family: var(--qbmbot-font, Georgia, "Times New Roman", serif);
+	color: var(--qbmbot-text, #1a1a1a);
+	line-height: 1.45;
+	box-sizing: border-box;
+}
+
+.qbmbot-root *,
+.qbmbot-root *::before,
+.qbmbot-root *::after {
+	box-sizing: border-box;
+}
+
+.qbmbot-launcher {
+	width: 56px;
+	height: 56px;
+	border: none;
+	border-radius: 50%;
+	background: var(--qbmbot-primary, #1a5f4a);
+	color: #fff;
+	cursor: pointer;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+
+.qbmbot-launcher:hover,
+.qbmbot-launcher:focus-visible {
+	filter: brightness(1.05);
+	outline: 2px solid var(--qbmbot-primary, #1a5f4a);
+	outline-offset: 2px;
+}
+
+.qbmbot-launcher-icon {
+	width: 28px;
+	height: 28px;
+	object-fit: contain;
+	border-radius: 4px;
+}
+
+.qbmbot-launcher-glyph {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 0;
+	color: #fff;
+}
+
+.qbmbot-panel {
+	position: absolute;
+	left: 0;
+	bottom: 68px;
+	width: min(360px, calc(100vw - 32px));
+	height: min(520px, calc(100vh - 120px));
+	background: var(--qbmbot-bg, #ffffff);
+	border-radius: var(--qbmbot-radius, 12px);
+	box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.qbmbot-panel[hidden] {
+	display: none !important;
+}
+
+.qbmbot-header {
+	background: var(--qbmbot-panel, #f7f7f5);
+	padding: 14px 14px 12px;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.qbmbot-header-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.qbmbot-title {
+	font-size: 16px;
+	color: var(--qbmbot-primary, #1a5f4a);
+}
+
+.qbmbot-subtitle {
+	font-size: 12px;
+	opacity: 0.8;
+}
+
+.qbmbot-close {
+	border: none;
+	background: transparent;
+	font-size: 22px;
+	line-height: 1;
+	cursor: pointer;
+	color: var(--qbmbot-text, #1a1a1a);
+	padding: 0 4px;
+}
+
+.qbmbot-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background: var(--qbmbot-bg, #ffffff);
+}
+
+.qbmbot-bubble {
+	max-width: 88%;
+	padding: 10px 12px;
+	border-radius: calc(var(--qbmbot-radius, 12px) * 0.75);
+	font-size: 14px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.qbmbot-bubble--user {
+	align-self: flex-end;
+	background: var(--qbmbot-primary, #1a5f4a);
+	color: #fff;
+}
+
+.qbmbot-bubble--assistant {
+	align-self: flex-start;
+	background: var(--qbmbot-panel, #f7f7f5);
+	color: var(--qbmbot-text, #1a1a1a);
+}
+
+.qbmbot-typing {
+	opacity: 0.7;
+}
+
+.qbmbot-suggestions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 12px 8px;
+}
+
+.qbmbot-chip {
+	border: 1px solid var(--qbmbot-primary, #1a5f4a);
+	background: transparent;
+	color: var(--qbmbot-primary, #1a5f4a);
+	border-radius: 999px;
+	padding: 6px 10px;
+	font-size: 12px;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.qbmbot-chip:hover,
+.qbmbot-chip:focus-visible {
+	background: var(--qbmbot-panel, #f7f7f5);
+}
+
+.qbmbot-form {
+	display: flex;
+	gap: 8px;
+	padding: 10px 12px 12px;
+	border-top: 1px solid rgba(0, 0, 0, 0.06);
+	background: var(--qbmbot-bg, #ffffff);
+	position: relative;
+}
+
+.qbmbot-input {
+	flex: 1;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: calc(var(--qbmbot-radius, 12px) * 0.6);
+	padding: 10px 12px;
+	font: inherit;
+	font-size: 14px;
+	color: var(--qbmbot-text, #1a1a1a);
+	background: #fff;
+}
+
+.qbmbot-send {
+	border: none;
+	border-radius: calc(var(--qbmbot-radius, 12px) * 0.6);
+	background: var(--qbmbot-primary, #1a5f4a);
+	color: #fff;
+	padding: 0 14px;
+	font: inherit;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.qbmbot-send:disabled,
+.qbmbot-input:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.qbmbot-hp {
+	position: absolute !important;
+	left: -10000px !important;
+	top: auto !important;
+	width: 1px !important;
+	height: 1px !important;
+	overflow: hidden !important;
+}
+
+@media (max-width: 480px) {
+	.qbmbot-panel {
+		width: calc(100vw - 24px);
+		height: min(70vh, 560px);
+	}
+}

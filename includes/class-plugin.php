@@ -51,5 +51,6 @@ final class Plugin {
 		( new REST( $settings, $faq, $spam, $limiter, $router, $prompts, $logger ) )->register();
 		( new CF7( $settings, $spam, $limiter, $router, $prompts, $mailer, $logger ) )->register();
 		( new Admin( $settings, $faq, $logger, $limiter ) )->register();
+		( new Updater() )->register();
 	}
 }

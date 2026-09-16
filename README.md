@@ -15,6 +15,19 @@ AI chat widget and Contact Form 7 email auto-responder for WordPress. Built to w
 2. Activate **QBMBOT**.
 3. Open **QBMBOT** in wp-admin and configure providers, FAQ preloads, spam limits, appearance, and CF7 field mapping.
 
+## Updates (GitHub Releases)
+
+QBMBOT checks [GitHub Releases](https://github.com/m1kfb/qbmbot/releases) for a newer version (cached ~12 hours). When one exists, WordPress shows the normal **Plugins → update available** notice and one-click upgrade from the release zip.
+
+**Release checklist (maintainers):**
+
+1. Bump `Version:` and `QBMBot_VERSION` in `qbmbot.php`
+2. Merge to `main`
+3. Tag `vX.Y.Z` and create a GitHub Release
+4. Attach `qbmbot-X.Y.Z.zip` with the plugin folder at the zip root (`qbmbot/qbmbot.php`)
+
+Sites on an older version will prompt to update after the next check (visit **Dashboard → Updates** or **Plugins** to refresh immediately).
+
 ## Features
 
 - Floating chat window fixed to the **bottom left**

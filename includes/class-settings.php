@@ -107,7 +107,7 @@ final class Settings {
 			'lead_require_phone'        => true,
 			'lead_notify_email'         => '',
 			'lead_email_subject'        => 'New chat enquiry',
-			'lead_capture_guidance'     => 'After you know the job type, ask practical follow-ups before contact details (e.g. rewire: room use, sockets/lights, house or flat). Never invent prices — say a team member will follow up.',
+			'lead_capture_guidance'     => 'Always answer the visitor\'s question first. Only collect contact details for booking/quote enquiries — not for informational questions about hours, coverage, or services. After you know the job type, ask practical follow-ups before contact details. Never invent prices — say a team member will follow up.',
 			'github_token'              => '',
 			'blocked_message'           => 'Sorry, chat is temporarily unavailable. Please try again later or use the contact form.',
 			'delete_data_on_uninstall'  => false,

@@ -29,14 +29,23 @@ final class Chat_Fallback {
 	private Job_Intake $intake;
 
 	/**
+	 * FAQ store.
+	 *
+	 * @var FAQ_Store|null
+	 */
+	private ?FAQ_Store $faq;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings        $settings Settings.
 	 * @param Job_Intake|null $intake   Job intake.
+	 * @param FAQ_Store|null  $faq      FAQ store.
 	 */
-	public function __construct( Settings $settings, ?Job_Intake $intake = null ) {
+	public function __construct( Settings $settings, ?Job_Intake $intake = null, ?FAQ_Store $faq = null ) {
 		$this->settings = $settings;
 		$this->intake   = $intake ?? new Job_Intake();
+		$this->faq      = $faq;
 	}
 
 	/**
@@ -51,11 +60,12 @@ final class Chat_Fallback {
 			return $this->lead_reply( $message, $lead, is_array( $lead_before ) ? $lead_before : array() );
 		}
 
-		return $this->intro_or_generic( $message );
+		$answered = $this->answer_question( $message );
+		return '' !== $answered ? $answered : $this->intro_or_generic( $message );
 	}
 
 	/**
-	 * Conversational lead-capture replies: short ack + one next question.
+	 * Conversational lead-capture replies: answer questions first, then advance the lead when appropriate.
 	 *
 	 * @param string               $message     Message.
 	 * @param array<string, mixed> $lead        Lead after turn.
@@ -69,12 +79,25 @@ final class Chat_Fallback {
 			return $this->post_capture_reply( $message, $lead, $was_sent );
 		}
 
+		$answered = $this->answer_question( $message );
+		$collect  = $this->intake->should_collect_contact( $message, $lead );
+
+		// Informational / FAQ turns: answer and stop — do not push for name/email.
+		if ( '' !== $answered && ! $collect ) {
+			return $answered;
+		}
+
 		$filled = $this->fields_just_filled( $lead_before, $lead );
-		$ask    = $this->next_lead_question( $lead );
-		$ack    = $this->acknowledgment( $message, $lead, $lead_before, $filled );
+		$ask    = $collect ? $this->next_lead_question( $lead ) : '';
+		$ack    = '' !== $answered
+			? $answered
+			: $this->acknowledgment( $message, $lead, $lead_before, $filled );
 
 		if ( '' === $ask ) {
-			return $ack !== '' ? $ack : $this->intro_or_generic( $message );
+			if ( '' !== $ack ) {
+				return $ack;
+			}
+			return $this->intro_or_generic( $message );
 		}
 
 		if ( '' === $ack ) {
@@ -82,6 +105,135 @@ final class Chat_Fallback {
 		}
 
 		return trim( $ack . ' ' . $ask );
+	}
+
+	/**
+	 * Answer from FAQ or business profile when the visitor asked something we can resolve offline.
+	 *
+	 * @param string $message Message.
+	 */
+	private function answer_question( string $message ): string {
+		if ( null !== $this->faq ) {
+			$item = $this->faq->match_question( $message );
+			if ( is_array( $item ) && '' !== trim( (string) ( $item['answer'] ?? '' ) ) ) {
+				return trim( (string) $item['answer'] );
+			}
+		}
+
+		if ( $this->intake->is_pricing_question( $message ) ) {
+			return __( "We can't give a firm price here as it depends on the job, but if you share a few details we can arrange for a team member to follow up.", 'qbmbot' );
+		}
+
+		$trade    = trim( (string) $this->settings->get( 'business_trade', '' ) );
+		$services = trim( (string) $this->settings->get( 'business_services', '' ) );
+		$area     = trim( (string) $this->settings->get( 'business_service_area', '' ) );
+		$notes    = trim( (string) $this->settings->get( 'business_notes', '' ) );
+		$needle   = strtolower( $message );
+
+		if ( $this->asks_about_hours( $needle ) ) {
+			$from_notes = $this->notes_snippet( $notes, array( 'hour', 'open', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'am', 'pm' ) );
+			if ( '' !== $from_notes ) {
+				return $from_notes;
+			}
+		}
+
+		if ( $this->mentions_area( $needle, $area ) || $this->asks_about_area( $needle ) ) {
+			if ( '' !== $area ) {
+				return sprintf(
+					/* translators: 1: business name, 2: service area */
+					__( '%1$s covers %2$s.', 'qbmbot' ),
+					$this->business_name(),
+					$area
+				);
+			}
+		}
+
+		if ( $this->mentions_service( $needle, $trade, $services ) || $this->asks_about_services( $needle ) ) {
+			$parts   = array();
+			$parts[] = sprintf(
+				/* translators: 1: business name, 2: trade/services */
+				__( '%1$s can help with %2$s.', 'qbmbot' ),
+				$this->business_name(),
+				$this->service_summary( $trade, $services )
+			);
+			if ( '' !== $services && false === stripos( $parts[0], $services ) ) {
+				$parts[] = $services;
+			}
+			if ( '' !== $area ) {
+				$parts[] = sprintf(
+					/* translators: %s: service area */
+					__( 'We cover %s.', 'qbmbot' ),
+					$area
+				);
+			}
+			return implode( ' ', array_filter( $parts ) );
+		}
+
+		if ( $this->intake->is_informational_question( $message ) && '' !== $notes ) {
+			$snippet = $this->notes_snippet( $notes, preg_split( '/\s+/', $needle ) ?: array() );
+			if ( '' !== $snippet ) {
+				return $snippet;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Whether the message asks about opening hours.
+	 *
+	 * @param string $message Lowercased message.
+	 */
+	private function asks_about_hours( string $message ): bool {
+		return (bool) preg_match( '/\b(hours|open|opening|closed|what time)\b/i', $message );
+	}
+
+	/**
+	 * Whether the message asks about coverage area.
+	 *
+	 * @param string $message Lowercased message.
+	 */
+	private function asks_about_area( string $message ): bool {
+		return (bool) preg_match( '/\b(cover|coverage|service area|areas? covered|do you come|near me|in my area)\b/i', $message );
+	}
+
+	/**
+	 * Whether the message asks what services are offered.
+	 *
+	 * @param string $message Lowercased message.
+	 */
+	private function asks_about_services( string $message ): bool {
+		return (bool) preg_match( '/\b(what (do|services)|services|what can you|do you (do|offer|provide)|offer)\b/i', $message );
+	}
+
+	/**
+	 * Pull a relevant line from business notes.
+	 *
+	 * @param string            $notes Notes text.
+	 * @param array<int, string> $needles Keywords.
+	 */
+	private function notes_snippet( string $notes, array $needles ): string {
+		if ( '' === $notes ) {
+			return '';
+		}
+		$lines = preg_split( '/\r\n|\r|\n/', $notes ) ?: array();
+		foreach ( $lines as $line ) {
+			$line = trim( $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			$hay = strtolower( $line );
+			foreach ( $needles as $needle ) {
+				$needle = strtolower( trim( (string) $needle ) );
+				if ( strlen( $needle ) < 2 ) {
+					continue;
+				}
+				if ( false !== strpos( $hay, $needle ) ) {
+					return $line;
+				}
+			}
+		}
+		return '';
 	}
 
 	/**
@@ -93,6 +245,11 @@ final class Chat_Fallback {
 	 */
 	private function post_capture_reply( string $message, array $lead, bool $was_sent ): string {
 		$name = $this->first_name( trim( (string) ( $lead['name'] ?? '' ) ) );
+
+		$answered = $this->answer_question( $message );
+		if ( '' !== $answered && ! $this->intake->is_pricing_question( $message ) ) {
+			return $answered;
+		}
 
 		if ( $this->intake->is_pricing_question( $message ) ) {
 			$base = __( "We can't give a firm price here as it depends on the job, but a member of the team will be in touch shortly with more information.", 'qbmbot' );

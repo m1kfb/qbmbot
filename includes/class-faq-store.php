@@ -87,23 +87,74 @@ final class FAQ_Store {
 	}
 
 	/**
-	 * Match FAQ by question text (case-insensitive).
+	 * Match FAQ by question text (exact, then soft overlap).
 	 *
 	 * @param string $question Question text.
 	 * @return array<string, mixed>|null
 	 */
 	public function match_question( string $question ): ?array {
 		$needle = strtolower( trim( $question ) );
+		if ( '' === $needle ) {
+			return null;
+		}
+
 		foreach ( $this->all() as $item ) {
 			if ( empty( $item['enabled'] ) ) {
 				continue;
 			}
 			$label = strtolower( trim( (string) ( $item['question'] ?? '' ) ) );
-			if ( $label !== '' && $label === $needle ) {
+			if ( '' !== $label && $label === $needle ) {
 				return $item;
 			}
 		}
-		return null;
+
+		$best         = null;
+		$best_score   = 0.0;
+		$needle_words = $this->significant_words( $needle );
+		foreach ( $this->all() as $item ) {
+			if ( empty( $item['enabled'] ) ) {
+				continue;
+			}
+			$label = strtolower( trim( (string) ( $item['question'] ?? '' ) ) );
+			if ( '' === $label ) {
+				continue;
+			}
+			if ( false !== strpos( $needle, $label ) || false !== strpos( $label, $needle ) ) {
+				return $item;
+			}
+			$label_words = $this->significant_words( $label );
+			if ( count( $label_words ) < 2 || count( $needle_words ) < 2 ) {
+				continue;
+			}
+			$overlap = count( array_intersect( $needle_words, $label_words ) );
+			$score   = $overlap / max( count( $label_words ), 1 );
+			if ( $score >= 0.6 && $score > $best_score ) {
+				$best_score = $score;
+				$best       = $item;
+			}
+		}
+
+		return $best;
+	}
+
+	/**
+	 * Significant words for soft FAQ matching.
+	 *
+	 * @param string $text Text.
+	 * @return array<int, string>
+	 */
+	private function significant_words( string $text ): array {
+		$stop  = array( 'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'about', 'please', 'could', 'would', 'your', 'you', 'are', 'can', 'do', 'does', 'what', 'when', 'where', 'who', 'how', 'is', 'a', 'an', 'to', 'of', 'in', 'on', 'our' );
+		$words = preg_split( '/\s+/', strtolower( preg_replace( '/[^a-z0-9\s\-]/i', ' ', $text ) ?? $text ) ) ?: array();
+		$out   = array();
+		foreach ( $words as $word ) {
+			$word = trim( $word );
+			if ( strlen( $word ) < 3 || in_array( $word, $stop, true ) ) {
+				continue;
+			}
+			$out[] = $word;
+		}
+		return array_values( array_unique( $out ) );
 	}
 
 	/**

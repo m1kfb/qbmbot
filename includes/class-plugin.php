@@ -46,7 +46,7 @@ final class Plugin {
 		$router   = new AI\Router( $settings );
 		$prompts  = new AI\Prompt_Builder( $settings, $faq, $content );
 		$intake   = new Job_Intake();
-		$fallback = new Chat_Fallback( $settings, $intake );
+		$fallback = new Chat_Fallback( $settings, $intake, $faq );
 		$mailer   = new Mailer( $settings );
 		$leads    = new Lead_Capture( $settings, $mailer, $logger, $intake );
 

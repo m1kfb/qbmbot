@@ -194,6 +194,99 @@ final class Job_Intake {
 	}
 
 	/**
+	 * Whether the message is mainly an informational question (not a booking request).
+	 *
+	 * @param string $message Message.
+	 */
+	public function is_informational_question( string $message ): bool {
+		$text = strtolower( trim( $message ) );
+		if ( '' === $text ) {
+			return false;
+		}
+
+		// Booking / call-out intent wins over informational wording.
+		if ( $this->is_booking_intent( $text ) ) {
+			return false;
+		}
+
+		// Concrete job descriptions are enquiries, even if phrased with a question mark.
+		if ( null !== $this->match( $text ) ) {
+			return false;
+		}
+
+		if ( $this->is_pricing_question( $text ) ) {
+			return true;
+		}
+
+		$patterns = array(
+			'/\b(what (are|is)|whats|what\'s|when (are|do|is)|where (are|do|is)|who (are|is)|how (do|does|long|far|often)|do you|does your|are you|can you cover|which areas?|opening hours|what time|about (you|the business|your))\b/i',
+			'/\b(hours|open|closed|coverage|cover|service area|areas? covered|insured|insured\?|qualified|guarantee|warranty|emergency|call.?out|response time|how it works|process|faq)\b/i',
+		);
+		foreach ( $patterns as $pattern ) {
+			if ( preg_match( $pattern, $text ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether the visitor wants a quote, booking, visit, or callback.
+	 *
+	 * @param string $message Message.
+	 */
+	public function is_booking_intent( string $message ): bool {
+		$text = strtolower( $message );
+		return (bool) preg_match(
+			'/\b(book|booking|arrange|schedule|call me|call back|callback|get in touch|come (out|round|over)|site visit|please contact|take my (details|number|email)|i need (an? )?(electrician|plumber|builder|engineer)|can you (come|help|do|fix|install|rewire))\b/i',
+			$text
+		);
+	}
+
+	/**
+	 * Whether contact details should be requested this turn.
+	 *
+	 * @param string               $message Message.
+	 * @param array<string, mixed> $lead    Lead after this turn.
+	 */
+	public function should_collect_contact( string $message, array $lead ): bool {
+		if ( ! empty( $lead['sent'] ) ) {
+			return false;
+		}
+
+		$enquiry_ready = ! empty( $lead['details_complete'] )
+			|| ( isset( $lead['detail_pending'] ) && is_array( $lead['detail_pending'] ) && empty( $lead['detail_pending'] ) && ! empty( $lead['job_type'] ) );
+
+		$awaiting_contact = $enquiry_ready
+			&& (
+				'' === trim( (string) ( $lead['name'] ?? '' ) )
+				|| '' === trim( (string) ( $lead['email'] ?? '' ) )
+				|| '' === trim( (string) ( $lead['phone'] ?? '' ) )
+			);
+
+		if ( $awaiting_contact && ! $this->is_informational_question( $message ) ) {
+			return true;
+		}
+
+		if ( $this->is_booking_intent( $message ) ) {
+			return true;
+		}
+
+		if ( $this->is_informational_question( $message ) ) {
+			return false;
+		}
+
+		// Practical job detail still being collected.
+		if ( ! empty( $this->pending_keys( $lead ) ) ) {
+			return true;
+		}
+
+		$enquiry = trim( (string) ( $lead['enquiry'] ?? '' ) );
+		return '' !== $enquiry && null !== $this->match( $enquiry );
+	}
+
+	/**
 	 * Job profiles with ordered follow-up questions.
 	 *
 	 * @return array<int, array{id:string,label:string,match:array<int,string>,questions:array<string,string>}>

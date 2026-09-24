@@ -86,7 +86,7 @@ final class Prompt_Builder {
 		}
 
 		if ( null !== $lead && ! empty( $this->settings->get( 'lead_capture_enabled', true ) ) ) {
-			$parts[] = $this->lead_capture_block( $lead );
+			$parts[] = $this->lead_capture_block( $lead, $question_text );
 		}
 
 		$parts[] = 'Keep replies concise (2–4 short paragraphs max unless asked for detail). Stay in character as this business only.';
@@ -95,29 +95,44 @@ final class Prompt_Builder {
 	}
 
 	/**
-	 * Instructions for collecting name / email / phone naturally.
+	 * Instructions for answering first, then collecting name / email / phone when appropriate.
 	 *
 	 * @param array<string, mixed> $lead Current lead state.
+	 * @param string|null          $question_text Latest visitor message.
 	 */
-	private function lead_capture_block( array $lead ): string {
+	private function lead_capture_block( array $lead, ?string $question_text = null ): string {
 		$require_phone = (bool) $this->settings->get( 'lead_require_phone', true );
+		$message       = trim( (string) $question_text );
+		$informational = $this->looks_informational( $message );
+		$booking       = $this->looks_like_booking( $message );
 
 		$lines   = array();
-		$lines[] = 'LEAD CAPTURE (mandatory for genuine service enquiries):';
-		$lines[] = 'Collect the visitor\'s contact details through natural conversation — never dump a form list unless they ask.';
-		$lines[] = 'Goal fields: full name, email address' . ( $require_phone ? ', phone number' : '' ) . ', and a short description of their enquiry/job.';
-		$lines[] = 'Ask for at most one missing detail at a time, woven into a helpful reply.';
+		$lines[] = 'CONVERSATION PRIORITY (mandatory):';
+		$lines[] = '1. If the visitor asked a question, ANSWER it first using the business profile, FAQ, and site content above.';
+		$lines[] = '2. Never skip answering to ask for name, email, or phone.';
+		$lines[] = '3. Informational questions (hours, coverage area, services, process, qualifications, FAQs) get a helpful answer only — do not ask for contact details on that turn unless they also asked to book/quote.';
+		$lines[] = '4. Lead capture is only for genuine service enquiries (bookings, quotes, call-outs, job details).';
+		$lines[] = '5. When collecting a lead: ask for at most one missing detail at a time, after a useful answer or short acknowledgment.';
+		$lines[] = '6. If they only said they need an electrician/plumber/etc without the actual job, ask what they need help with before name or contact details.';
+		$lines[] = '7. Once you know the job type, ask 1–3 practical follow-ups before contact details.';
+		$lines[] = '8. Never invent prices. If they ask how much it costs, say you cannot give a firm price in chat because it depends on the job, and that a team member can follow up.';
+		$lines[] = '9. Do not mention the contact form unless they ask how else to get in touch.';
+		$lines[] = 'Goal fields when a lead is appropriate: full name, email address' . ( $require_phone ? ', phone number' : '' ) . ', and a short description of their enquiry/job.';
 		$lines[] = 'If they already gave a detail, do not ask for it again.';
-		$lines[] = 'If they only said they need an electrician/plumber/etc without the actual job (e.g. rewiring, sockets), ask what they need help with before asking for name or contact details.';
-		$lines[] = 'Once you know the job type, ask 1–3 practical follow-ups before contact details. Examples: room rewire → what the room is used for, how many sockets/lights, house or flat; leak → where and urgency; boiler → repair vs replace.';
-		$lines[] = 'Keep replies short: one brief acknowledgment + one question. Do not mention the contact form unless they ask how else to get in touch.';
-		$lines[] = 'Never invent prices. If they ask how much it costs, say you cannot give a firm price in chat because it depends on the job, and that a team member will follow up.';
-		$lines[] = 'When you have enough to help them book/quote, confirm you will pass their details to the team.';
 
 		if ( ! empty( $lead['sent'] ) ) {
 			$lines[] = 'Their enquiry has already been passed to the team. Do not re-ask for contact details.';
 			$lines[] = 'If they ask about price/cost/quote, say you cannot give a firm price here and that a team member will be in touch shortly.';
-			$lines[] = 'For other follow-ups, say the team has their details and will cover it when they call/email; offer to note anything else useful.';
+			$lines[] = 'For other follow-ups, answer if you can from the profile/FAQ/site content; otherwise say the team has their details and will cover it when they call/email.';
+			return implode( "\n", $lines );
+		}
+
+		if ( $informational && ! $booking ) {
+			$lines[] = 'THIS TURN: the visitor asked an informational question — answer it fully. Do not ask for name, email, or phone this turn.';
+			$extra   = trim( (string) $this->settings->get( 'lead_capture_guidance', '' ) );
+			if ( '' !== $extra ) {
+				$lines[] = 'Extra guidance: ' . $extra;
+			}
 			return implode( "\n", $lines );
 		}
 
@@ -173,7 +188,7 @@ final class Prompt_Builder {
 			$lines[] = 'Already captured: ' . implode( '; ', $have );
 		}
 		if ( $missing ) {
-			$lines[] = 'Still missing (ask next, one at a time): ' . implode( ', ', $missing );
+			$lines[] = 'Still useful to collect later (ask at most one, and only after answering any question they just asked): ' . implode( ', ', $missing );
 		} else {
 			$lines[] = 'All required details are captured. Confirm the team will be in touch.';
 		}
@@ -184,6 +199,44 @@ final class Prompt_Builder {
 		}
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Heuristic: visitor message looks like an informational question.
+	 *
+	 * @param string $message Message.
+	 */
+	private function looks_informational( string $message ): bool {
+		$text = strtolower( trim( $message ) );
+		if ( '' === $text || $this->looks_like_booking( $text ) ) {
+			return false;
+		}
+		// Concrete job requests are enquiries even when phrased as a question.
+		if ( preg_match( '/\b(rewir|wiring|socket|fuse|boiler|leak|install|repair|consumer unit|fuse board)\w*\b/i', $text ) ) {
+			return false;
+		}
+		if ( preg_match( '/\b(how much|price|priced|pricing|cost|costs|quote|estimate|fee|charge|rates?)\b/i', $text ) ) {
+			return true;
+		}
+		if ( preg_match( '/\b(what (are|is)|whats|what\'s|when (are|do|is)|where (are|do|is)|who (are|is)|how (do|does|long|far|often)|do you|does your|are you|can you cover|which areas?|opening hours|what time)\b/i', $text ) ) {
+			return true;
+		}
+		if ( preg_match( '/\b(hours|open|closed|coverage|cover|service area|areas? covered|insured|qualified|guarantee|warranty|emergency|how it works|process)\b/i', $text ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Heuristic: visitor wants a booking / quote / visit.
+	 *
+	 * @param string $message Message.
+	 */
+	private function looks_like_booking( string $message ): bool {
+		return (bool) preg_match(
+			'/\b(book|booking|arrange|schedule|call me|call back|callback|get in touch|come (out|round|over)|site visit|please contact|take my (details|number|email)|i need (an? )?(electrician|plumber|builder|engineer)|can you (come|help|do|fix|install|rewire))\b/i',
+			strtolower( $message )
+		);
 	}
 
 	/**
